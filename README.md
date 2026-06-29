@@ -120,7 +120,7 @@ A exportação gera um `.xlsx` com três abas:
 | Contato | Tem telefone | 10 |
 | Porte | Grande / Média / Pequena / Micro / MEI | até 15 |
 
-**Temperatura:** 🔥 Quente (≥ 70) · 🟡 Morno (45–69) · ❄️ Frio (&lt; 45)
+**Temperatura:** Quente (≥ 70) · Morno (45–69) · Frio (&lt; 45)
 
 ---
 
