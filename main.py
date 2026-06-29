@@ -212,7 +212,7 @@ def update_search_history_status(history_id: int, status: str, leads_found: int 
         logger.exception("Failed to update history id=%s status=%s", history_id, status)
         traceback.print_exc()
         raise
-# Segmentos com ALTO potencial para serviços Adapti
+# Segmentos com alto potencial digital
 HIGH_FIT_SEGMENTS = [
     "clínica", "consultório", "odontologia", "dentista", "médico", "saúde",
     "advocacia", "advogado", "escritório", "contabilidade", "contador",
@@ -252,9 +252,9 @@ def classify_porte(nome: str, categoria: str, avaliacoes: int) -> str:
     if avaliacoes >= 50:  return "Pequena empresa"
     return "Micro empresa"
 
-def score_lead_adapti(lead: dict) -> tuple:
+def score_lead(lead: dict) -> tuple:
     """
-    SISTEMA DE SCORE ADAPTI — máx 100 pontos
+    Sistema de score comercial — máx 100 pontos
     
     Dimensão 1 — Presença digital atual (0-30 pts)
       Sem site: +25 (dor latente → oportunidade de site/lp)
@@ -272,7 +272,7 @@ def score_lead_adapti(lead: dict) -> tuple:
       Nota 4.0-4.4: +10
       Nota 3.5-3.9: +5
     
-    Dimensão 4 — Fit com serviços Adapti (0-20 pts)
+    Dimensão 4 — Fit de segmento (0-20 pts)
       Segmento HIGH_FIT: +20
       Tem telefone/WhatsApp: +10 (contatável)
     
@@ -344,7 +344,7 @@ def build_whatsapp_link(telefone: str, nome_empresa: str) -> str:
             digits = "55" + digits
     msg = (
         f"Olá! Tudo bem? 😊\n\n"
-        f"Sou da *Adapti Soluções Web* e entrei em contato porque identificamos que a *{nome_empresa}* "
+        f"Entrei em contato porque identificamos que a *{nome_empresa}* "
         f"pode se beneficiar com soluções digitais personalizadas — seja um site institucional, "
         f"landing page, sistema web ou aplicativo mobile.\n\n"
         f"Posso te apresentar como podemos ajudar? Seria rapidinho! 🚀"
@@ -548,7 +548,7 @@ def scrape_worker(job_id: str, segmento: str, cidade: str, estado: str,
                     "cidade": cidade,
                     "estado": estado,
                 }
-                clf, score = score_lead_adapti(lead)
+                clf, score = score_lead(lead)
                 lead["classificacao"] = clf
                 lead["score"] = score
 
@@ -620,7 +620,7 @@ def generate_xlsx(leads: list, segmento: str, cidade: str, estado: str, prospect
         "Porte",              # L (novo)
         "Nota Google",        # M (novo)
         "Avaliações",         # N (novo)
-        "Score Adapti",       # O (novo)
+        "Score",              # O (novo)
         "Temperatura",        # P (novo)
         "Link WhatsApp",      # Q (novo)
         "Endereço",           # R (novo)
@@ -694,7 +694,7 @@ def generate_xlsx(leads: list, segmento: str, cidade: str, estado: str, prospect
             lead.get("porte", ""),           # L Porte
             lead.get("nota"),                # M Nota Google
             lead.get("avaliacoes"),          # N Avaliações
-            lead.get("score", 0),            # O Score Adapti
+            lead.get("score", 0),            # O Score
             clf,                             # P Temperatura
             lead.get("whatsapp_link", ""),   # Q Link WhatsApp
             lead.get("endereco", ""),        # R Endereço
@@ -726,8 +726,8 @@ def generate_xlsx(leads: list, segmento: str, cidade: str, estado: str, prospect
     ws.freeze_panes = "A2"
 
     # Aba de resumo / score legend
-    ws2 = wb.create_sheet("Score Adapti")
-    ws2["A1"] = "SISTEMA DE SCORE ADAPTI"
+    ws2 = wb.create_sheet("Score")
+    ws2["A1"] = "SISTEMA DE SCORE"
     ws2["A1"].font = Font(bold=True, size=14, color="1C4587")
     ws2.merge_cells("A1:C1")
 
@@ -740,7 +740,7 @@ def generate_xlsx(leads: list, segmento: str, cidade: str, estado: str, prospect
         ws2.cell(3, col).alignment = Alignment(horizontal="center")
 
     score_table = [
-        ("Presença Digital", "Sem site (oportunidade clara para Adapti)", 25),
+        ("Presença Digital", "Sem site (oportunidade clara de presença digital)", 25),
         ("Presença Digital", "Com site (pode querer sistema/app/redesign)", 5),
         ("Avaliações Google", "≥ 100 avaliações", 20),
         ("Avaliações Google", "50 – 99 avaliações", 15),

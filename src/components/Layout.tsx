@@ -90,8 +90,6 @@ export function Layout({ children, history }: LayoutProps) {
                   operacional
                 </span>
               </div>
-              {/* TODO: substituir pela logo Adapti */}
-              {/* <img src="./assets/logo-adapti.svg" className="h-4 opacity-70" /> */}
             </div>
           </header>
 
@@ -132,7 +130,7 @@ export function Layout({ children, history }: LayoutProps) {
               <p className="text-[13px] leading-6 text-[#8896ac]">
                 O objetivo do aplicativo é automatizar a prospecção de leads no
                 Google Maps, qualificar empresas com score comercial e exportar
-                uma planilha pronta para uso pela Adapti JE.
+                uma planilha pronta para prospecção comercial.
               </p>
 
               <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3">

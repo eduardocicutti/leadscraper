@@ -1,7 +1,7 @@
 {
   "productName": "lead-scraper",
   "version": "0.1.0",
-  "identifier": "br.com.adapti.lead-scraper",
+  "identifier": "com.leadscraper.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",

@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 src-tauri/target/
+src-tauri/gen/
 
 # Python
 __pycache__/
@@ -20,6 +21,10 @@ banco.db
 
 # Sidecar binaries (rebuild with PyInstaller)
 src-tauri/binaries/*.exe
+
+# Local / misc artifacts
+*.csv
+app-icon.png
 
 # OS / editor
 .DS_Store

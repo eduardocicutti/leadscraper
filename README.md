@@ -1,108 +1,168 @@
-# Caçador de Leads — Adapti
- 
-Sistema de prospecção automática via Google Maps. Busca, qualifica e exporta leads no formato do modelo Julho.
- 
+# Lead Scraper
+
+Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecimentos por segmento e localização, qualifica com score comercial e exporta planilha Excel.
+
 ---
- 
-## O que você precisa ter instalado
- 
-- **Python 3.10 ou mais novo** — [baixar aqui](https://www.python.org/downloads/)
-- **Um destes navegadores:** Chrome, Edge ou Firefox
-  - Edge — já vem instalado no Windows 10/11
-  - Chrome — funciona em Windows, Mac e Linux
-  - Firefox — funciona em Windows, Mac e Linux
-  - Opera, Brave e outros não são suportados
+
+## Stack
+
+| Camada | Tecnologia |
+|--------|------------|
+| Interface | React 19, TypeScript, Vite, Tailwind CSS 4 |
+| Desktop | Tauri 2 (WebView2 no Windows) |
+| API | FastAPI + Uvicorn (`localhost:8000`) |
+| Scraping | Selenium 4 + Microsoft Edge (headless) |
+| Banco | SQLite via SQLModel |
+| Exportação | OpenPyXL (.xlsx) |
+
 ---
- 
-## Instalação (só na primeira vez)
- 
-Abra o terminal (PowerShell no Windows, Terminal no Mac/Linux) e rode:
- 
+
+## Pré-requisitos
+
+- **Node.js 18+** e npm
+- **Python 3.10+**
+- **Rust** (para builds Tauri) — [rustup.rs](https://rustup.rs)
+- **Microsoft Edge** (já incluso no Windows 10/11)
+
+---
+
+## Instalação
+
+### Dependências Python
+
+```powershell
+pip install fastapi uvicorn selenium webdriver-manager openpyxl sqlmodel
 ```
-pip install fastapi uvicorn selenium webdriver-manager openpyxl
+
+Ou use o script:
+
+```powershell
+.\install.bat
 ```
- 
+
+### Dependências Node
+
+```powershell
+npm install
+```
+
 ---
- 
+
 ## Como rodar
- 
-### Windows
-Dê dois cliques no arquivo **`rodar.bat`** dentro da pasta do projeto.
- 
-O navegador vai abrir sozinho em `http://localhost:8000`.
- 
-### Mac / Linux
-Abra o terminal na pasta do projeto e rode:
- 
+
+### Modo desenvolvimento (recomendado)
+
+Em um terminal, inicie o backend:
+
+```powershell
+python main.py
 ```
-python3 -m uvicorn main:app --port 8000
+
+Em outro terminal, inicie o app desktop:
+
+```powershell
+npm run tauri dev
 ```
- 
-Depois abra `http://localhost:8000` no navegador.
- 
+
+O frontend carrega em `http://127.0.0.1:1420` e comunica com a API em `http://127.0.0.1:8000`.
+
+### Apenas backend (sem Tauri)
+
+```powershell
+python -m uvicorn main:app --port 8000
+```
+
+> O arquivo `roda.bat` abre o navegador em `:8000`, mas a interface React exige o Vite ou o build em `dist/`. Prefira `npm run tauri dev` ou `npm run dev` + backend separado.
+
+### Build de produção
+
+```powershell
+npm run build
+npm run tauri build
+```
+
+O instalador `.exe` é gerado em `src-tauri/target/release/bundle/`.
+
+O sidecar Python precisa ser compilado com PyInstaller antes do build Tauri — veja `src-tauri/binaries/README.md`.
+
 ---
- 
+
 ## Como usar
- 
-1. **Selecione seu nome** no campo "Prospectador"
-2. **Digite o segmento** que quer buscar (ex: clínicas odontológicas, academias, escritórios de advocacia)
-3. **Digite a cidade e o estado**
-4. **Escolha quantos leads** quer coletar (10, 20, 30 ou 50)
-5. Clique em **Buscar** e aguarde — o sistema faz tudo sozinho
-6. Quando terminar, clique em **Exportar Excel** para baixar a planilha
+
+1. Selecione o **prospectador** no formulário (as iniciais aparecem no avatar da sidebar).
+2. Informe **segmento**, **cidade**, **estado** e **quantidade** de leads.
+3. Clique em **Iniciar extração** e acompanhe o progresso na barra de status.
+4. Ao concluir, revise a tabela e clique em **Exportar .xlsx**.
+
+O histórico de buscas fica no painel lateral (ícone de relógio).
+
 ---
- 
-## O que vem na planilha
- 
-A planilha exportada segue o mesmo formato do modelo Julho, com:
- 
-- Nome do responsável (seu nome, preenchido automaticamente)
-- Estágio atual (inicia em "Qualificação")
-- Nome da empresa, telefone, ramo de atividade
-- Porte da empresa (MEI, Micro, Pequena, Média ou Grande)
-- Nota e número de avaliações no Google
-- Score Adapti (0 a 100) e temperatura ( Quente /  Morno /  Frio)
-- Link do WhatsApp com mensagem pronta da Adapti
-- Link direto para o Google Maps
+
+## Planilha exportada
+
+A exportação gera um `.xlsx` com três abas:
+
+- **Página1** — leads com colunas de CRM (responsável, estágio, empresa, telefone, ramo, porte, nota, score, temperatura, links).
+- **Score** — legenda do sistema de pontuação.
+- **Resumo** — totais da coleta (quentes, mornos, frios, WhatsApp, sites).
+
 ---
- 
-## WhatsApp
- 
-Quando o número coletado for de celular, aparece um botão ** Enviar** na tela.
- 
-Ao clicar, o WhatsApp abre direto com a mensagem já escrita com o nome da empresa. É só enviar.
- 
+
+## Sistema de score (0–100)
+
+| Dimensão | Critério | Pontos |
+|----------|----------|--------|
+| Presença digital | Sem site | 25 |
+| Presença digital | Com site | 5 |
+| Avaliações Google | ≥ 100 / 50–99 / 10–49 / 1–9 | até 20 |
+| Nota Google | ≥ 4.5 / 4.0–4.4 / 3.5–3.9 | até 15 |
+| Fit de segmento | Segmento com alto potencial digital | 20 |
+| Contato | Tem telefone | 10 |
+| Porte | Grande / Média / Pequena / Micro / MEI | até 15 |
+
+**Temperatura:** 🔥 Quente (≥ 70) · 🟡 Morno (45–69) · ❄️ Frio (&lt; 45)
+
 ---
- 
-## Sistema de Score
- 
-Cada lead recebe uma pontuação de 0 a 100:
- 
-| Critério | Pontos |
-|---|---|
-| Empresa sem site (oportunidade para Adapti) | 25 pts |
-| Avaliações no Google (quanto mais, melhor) | até 20 pts |
-| Nota no Google (quanto maior, melhor) | até 15 pts |
-| Segmento com potencial digital alto | 30 pts |
-| Porte da empresa | até 15 pts |
- 
-** Quente** = 70 pontos ou mais  
-** Morno** = 45 a 69 pontos  
-** Frio** = menos de 45 pontos  
- 
+
+## API local
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `POST` | `/scrape` | Inicia uma busca |
+| `GET` | `/status/{job_id}` | Progresso e leads em tempo real |
+| `GET` | `/download/{job_id}` | Download do Excel |
+| `GET` | `/history` | Últimas 50 buscas |
+| `GET` | `/health` | Health check (usado pelo Tauri) |
+
 ---
- 
+
+## Estrutura do projeto
+
+```
+lead_scraper/
+├── src/                 # Frontend React
+├── src-tauri/           # Shell Tauri + sidecar
+├── main.py              # Backend FastAPI + scraping + banco
+├── install.bat          # Instala deps Python
+├── scraper-sidecar.spec # PyInstaller
+└── package.json
+```
+
+---
+
 ## Problemas comuns
- 
-**"uvicorn não é reconhecido"**  
-Use `python -m uvicorn main:app --port 8000` em vez de só `uvicorn`.
- 
-**"Nenhum navegador encontrado"**  
-Instale o Chrome ou confirme que o Edge está atualizado.
- 
-**A busca demorou muito ou não encontrou nada**  
-O Google Maps pode ter limitado o acesso temporariamente. Aguarde alguns minutos e tente de novo com um segmento diferente.
- 
-**A planilha não exportou**  
-A busca precisa terminar completamente antes de exportar. Aguarde a mensagem "Concluído!" aparecer na tela.
- 
+
+**Backend não responde**  
+Confirme que `python main.py` está rodando e que a porta 8000 está livre.
+
+**Erro ao iniciar Edge**  
+Atualize o Microsoft Edge ou verifique se o `webdriver-manager` consegue baixar o driver.
+
+**Nenhum lead encontrado**  
+Tente outro segmento ou cidade. O Google Maps pode limitar acesso temporariamente — aguarde alguns minutos.
+
+**Exportação indisponível**  
+A busca precisa terminar com status `done` antes de exportar.
+
+**Logs**  
+O backend grava em `backend.log` ao lado do arquivo `banco.db`.
