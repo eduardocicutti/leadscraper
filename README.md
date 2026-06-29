@@ -142,9 +142,12 @@ A exportação gera um `.xlsx` com três abas:
 lead_scraper/
 ├── backend/             # API, domínio, repositórios e serviços
 │   ├── api/             # FastAPI app e rotas
+│   ├── adapters/        # Selenium (futuro: Playwright)
 │   ├── domain/          # modelos, score, whatsapp
+│   ├── ports/           # interfaces (BrowserPort)
 │   ├── repositories/    # SQLite
-│   └── services/        # scraping, export, jobs
+│   ├── scrapers/        # Google Maps
+│   └── services/        # orquestração, export, jobs
 ├── src/                 # Frontend React
 ├── src-tauri/           # Shell Tauri + sidecar
 ├── main.py              # Entry point do backend
