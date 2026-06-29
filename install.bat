@@ -1,1 +1,2 @@
-pip install fastapi uvicorn selenium webdriver-manager openpyxl sqlmodel
+pip install fastapi uvicorn playwright openpyxl sqlmodel
+python -m playwright install chromium

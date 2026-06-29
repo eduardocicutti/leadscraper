@@ -11,7 +11,7 @@ Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecime
 | Interface | React 19, TypeScript, Vite, Tailwind CSS 4 |
 | Desktop | Tauri 2 (WebView2 no Windows) |
 | API | FastAPI + Uvicorn (`localhost:8000`) |
-| Scraping | Selenium 4 + Microsoft Edge (headless) |
+| Scraping | Playwright + Chromium (headless) |
 | Banco | SQLite via SQLModel |
 | Exportação | OpenPyXL (.xlsx) |
 
@@ -22,7 +22,6 @@ Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecime
 - **Node.js 18+** e npm
 - **Python 3.10+**
 - **Rust** (para builds Tauri) — [rustup.rs](https://rustup.rs)
-- **Microsoft Edge** (já incluso no Windows 10/11)
 
 ---
 
@@ -31,7 +30,8 @@ Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecime
 ### Dependências Python
 
 ```powershell
-pip install fastapi uvicorn selenium webdriver-manager openpyxl sqlmodel
+pip install fastapi uvicorn playwright openpyxl sqlmodel
+python -m playwright install chromium
 ```
 
 Ou use o script:
@@ -39,6 +39,8 @@ Ou use o script:
 ```powershell
 .\install.bat
 ```
+
+Para voltar ao Selenium legado: `$env:BROWSER_ENGINE="selenium"` antes de iniciar o backend.
 
 ### Dependências Node
 
@@ -142,7 +144,7 @@ A exportação gera um `.xlsx` com três abas:
 lead_scraper/
 ├── backend/             # API, domínio, repositórios e serviços
 │   ├── api/             # FastAPI app e rotas
-│   ├── adapters/        # Selenium (futuro: Playwright)
+│   ├── adapters/        # Playwright (fallback: Selenium via BROWSER_ENGINE)
 │   ├── domain/          # modelos, score, whatsapp
 │   ├── ports/           # interfaces (BrowserPort)
 │   ├── repositories/    # SQLite
@@ -163,8 +165,8 @@ lead_scraper/
 **Backend não responde**  
 Confirme que `python main.py` está rodando e que a porta 8000 está livre.
 
-**Erro ao iniciar Edge**  
-Atualize o Microsoft Edge ou verifique se o `webdriver-manager` consegue baixar o driver.
+**Erro ao iniciar navegador**  
+Rode `python -m playwright install chromium`. Se persistir, tente `$env:BROWSER_ENGINE="selenium"` como fallback.
 
 **Nenhum lead encontrado**  
 Tente outro segmento ou cidade. O Google Maps pode limitar acesso temporariamente — aguarde alguns minutos.
