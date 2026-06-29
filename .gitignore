@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+src-tauri/target/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Logs and local runtime
+*.log
+banco.db
+*.db
+
+# Sidecar binaries (rebuild with PyInstaller)
+src-tauri/binaries/*.exe
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Env secrets
+.env
+.env.*
