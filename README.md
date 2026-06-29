@@ -140,9 +140,14 @@ A exportação gera um `.xlsx` com três abas:
 
 ```
 lead_scraper/
+├── backend/             # API, domínio, repositórios e serviços
+│   ├── api/             # FastAPI app e rotas
+│   ├── domain/          # modelos, score, whatsapp
+│   ├── repositories/    # SQLite
+│   └── services/        # scraping, export, jobs
 ├── src/                 # Frontend React
 ├── src-tauri/           # Shell Tauri + sidecar
-├── main.py              # Backend FastAPI + scraping + banco
+├── main.py              # Entry point do backend
 ├── install.bat          # Instala deps Python
 ├── scraper-sidecar.spec # PyInstaller
 └── package.json

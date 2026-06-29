@@ -3,7 +3,8 @@
 from PyInstaller.utils.hooks import collect_submodules
 
 hiddenimports = (
-    collect_submodules('selenium')
+    collect_submodules('backend')
+    + collect_submodules('selenium')
     + collect_submodules('webdriver_manager')
     + collect_submodules('uvicorn')
     + collect_submodules('sqlmodel')
