@@ -1,6 +1,6 @@
 import traceback
 
-from backend.adapters.selenium_browser import create_selenium_browser
+from backend.adapters.browser_factory import create_browser
 from backend.core.logging import logger
 from backend.repositories.database import (
     save_leads_batch,
@@ -28,7 +28,7 @@ def scrape_worker(
         max_results,
     )
     history_id: int | None = None
-    browser = create_selenium_browser()
+    browser = create_browser()
     leads: list[dict] = []
     job = job_store.jobs[job_id]
 
@@ -39,7 +39,7 @@ def scrape_worker(
 
     try:
         job["status"] = "running"
-        job["log"] = "Iniciando Edge..."
+        job["log"] = "Iniciando navegador..."
         history_id = save_search_history(job_id, segmento, cidade, estado, prospectador)
 
         try:
@@ -48,7 +48,7 @@ def scrape_worker(
         except Exception as exc:
             logger.exception("Failed to initialize browser for job %s", job_id)
             traceback.print_exc()
-            set_error(f"Erro ao iniciar Edge: {str(exc)[:180]}")
+            set_error(f"Erro ao iniciar navegador: {str(exc)[:180]}")
             if history_id is not None:
                 update_search_history_status(history_id, "error")
             return
