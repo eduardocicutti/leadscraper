@@ -19,8 +19,12 @@ venv/
 banco.db
 *.db
 
-# Sidecar binaries (rebuild with PyInstaller)
+# Sidecar binaries (rebuild with build-sidecar.bat)
 src-tauri/binaries/*.exe
+src-tauri/binaries/ms-playwright/
+build/sidecar/
+dist/scraper-sidecar.exe
+dist/ms-playwright/
 
 # Local / misc artifacts
 *.csv

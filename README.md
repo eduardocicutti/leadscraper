@@ -30,7 +30,7 @@ Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecime
 ### Dependências Python
 
 ```powershell
-pip install fastapi uvicorn playwright openpyxl sqlmodel
+pip install fastapi uvicorn playwright openpyxl sqlmodel pyinstaller
 python -m playwright install chromium
 ```
 
@@ -79,13 +79,13 @@ python -m uvicorn main:app --port 8000
 ### Build de produção
 
 ```powershell
-npm run build
+.\build-sidecar.bat
 npm run tauri build
 ```
 
 O instalador `.exe` é gerado em `src-tauri/target/release/bundle/`.
 
-O sidecar Python precisa ser compilado com PyInstaller antes do build Tauri — veja `src-tauri/binaries/README.md`.
+`build-sidecar.bat` compila o backend com PyInstaller, baixa o Chromium do Playwright e copia tudo para `src-tauri/binaries/`. Detalhes em `src-tauri/binaries/README.md`.
 
 ---
 

@@ -3,18 +3,18 @@
 from PyInstaller.utils.hooks import collect_submodules
 
 hiddenimports = (
-    collect_submodules('backend')
-    + collect_submodules('playwright')
-    + collect_submodules('selenium')
-    + collect_submodules('webdriver_manager')
-    + collect_submodules('uvicorn')
-    + collect_submodules('sqlmodel')
-    + collect_submodules('sqlalchemy')
+    collect_submodules("backend")
+    + collect_submodules("playwright")
+    + collect_submodules("uvicorn")
+    + collect_submodules("sqlmodel")
+    + collect_submodules("sqlalchemy")
+    + collect_submodules("greenlet")
 )
 
+excludes = ["selenium", "webdriver_manager"]
 
 a = Analysis(
-    ['main.py'],
+    ["main.py"],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,7 +22,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     noarchive=False,
     optimize=0,
 )
@@ -34,11 +34,11 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='scraper-sidecar',
+    name="scraper-sidecar",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=True,
