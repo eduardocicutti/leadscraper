@@ -4,7 +4,9 @@ import uvicorn
 
 from backend.api.app import create_app
 from backend.core.logging import logger
+from backend.core.runtime import configure_playwright_path
 
+configure_playwright_path()
 app = create_app()
 
 multiprocessing.freeze_support()

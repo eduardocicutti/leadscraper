@@ -68,15 +68,29 @@ pub fn run() {
             let db_path = app_data_dir.join("banco.db");
             let launch_log_path = app_data_dir.join("sidecar-launch.log");
             let sidecar_log_path = app_data_dir.join("sidecar.log");
+            let resource_dir = app.path().resource_dir()?;
+            let playwright_browsers = resource_dir.join("ms-playwright");
             append_log(&launch_log_path, "starting lead-scraper app setup");
             append_log(&launch_log_path, &format!("DB_PATH={}", db_path.display()));
+            append_log(
+                &launch_log_path,
+                &format!("PLAYWRIGHT_BROWSERS_PATH={}", playwright_browsers.display()),
+            );
 
             if !backend_is_ready() {
                 append_log(&launch_log_path, "backend offline; spawning scraper-sidecar");
                 match app
                     .shell()
                     .sidecar("scraper-sidecar")
-                    .and_then(|sidecar| sidecar.env("DB_PATH", db_path.to_string_lossy().to_string()).spawn())
+                    .and_then(|sidecar| {
+                        sidecar
+                            .env("DB_PATH", db_path.to_string_lossy().to_string())
+                            .env(
+                                "PLAYWRIGHT_BROWSERS_PATH",
+                                playwright_browsers.to_string_lossy().to_string(),
+                            )
+                            .spawn()
+                    })
                 {
                     Ok((mut rx, child)) => {
                         let log_path = sidecar_log_path.clone();

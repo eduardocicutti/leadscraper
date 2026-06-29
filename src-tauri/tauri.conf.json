@@ -34,6 +34,9 @@
     ],
     "externalBin": [
       "binaries/scraper-sidecar"
-    ]
+    ],
+    "resources": {
+      "binaries/ms-playwright/": "ms-playwright/"
+    }
   }
 }

@@ -2,6 +2,7 @@ import os
 import traceback
 
 from backend.core.logging import logger
+from backend.core.runtime import configure_playwright_path
 from backend.ports.browser import BrowserPort
 
 USER_AGENT = (
@@ -20,6 +21,7 @@ class PlaywrightBrowser:
     def launch(self) -> None:
         from playwright.sync_api import sync_playwright
 
+        configure_playwright_path()
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=True)
         self._context = self._browser.new_context(
