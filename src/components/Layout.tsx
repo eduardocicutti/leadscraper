@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { History, Search, Settings, X } from "lucide-react";
+import { Archive, History, Search, Settings, Star, X } from "lucide-react";
 import { useAppStore } from "../store";
 import { getInitials } from "../utils/initials";
 
@@ -10,6 +10,8 @@ interface LayoutProps {
 }
 
 export function Layout({ children, history }: LayoutProps) {
+  const activeView = useAppStore((state) => state.activeView);
+  const setActiveView = useAppStore((state) => state.setActiveView);
   const historyOpen = useAppStore((state) => state.historyOpen);
   const setHistoryOpen = useAppStore((state) => state.setHistoryOpen);
   const prospectador = useAppStore((state) => state.prospectador);
@@ -18,6 +20,13 @@ export function Layout({ children, history }: LayoutProps) {
 
   const navItem =
     "w-8 h-8 rounded-md flex items-center justify-center transition-colors duration-100";
+
+  const headerTitle =
+    activeView === "selected"
+      ? "LISTA PREFERENCIAL"
+      : activeView === "history"
+        ? "PROSPECÇÕES PASSADAS"
+        : "PROSPECÇÃO";
 
   return (
     <div className="min-h-screen w-full bg-[#0c1118] text-[#e8edf5] font-sans">
@@ -44,9 +53,9 @@ export function Layout({ children, history }: LayoutProps) {
               <button
                 type="button"
                 aria-label="Busca"
-                onClick={() => setHistoryOpen(false)}
+                onClick={() => setActiveView("search")}
                 className={`${navItem} ${
-                  !historyOpen
+                  activeView === "search" && !historyOpen
                     ? "bg-[#1d3a6e] text-[#60a5fa]"
                     : "text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]"
                 }`}
@@ -55,7 +64,31 @@ export function Layout({ children, history }: LayoutProps) {
               </button>
               <button
                 type="button"
-                aria-label="Histórico"
+                aria-label="Lista Preferencial"
+                onClick={() => setActiveView("selected")}
+                className={`${navItem} ${
+                  activeView === "selected"
+                    ? "bg-[#1d3a6e] text-[#60a5fa]"
+                    : "text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]"
+                }`}
+              >
+                <Star className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Prospecções passadas"
+                onClick={() => setActiveView("history")}
+                className={`${navItem} ${
+                  activeView === "history"
+                    ? "bg-[#1d3a6e] text-[#60a5fa]"
+                    : "text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]"
+                }`}
+              >
+                <Archive className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Histórico rápido"
                 onClick={() => setHistoryOpen(!historyOpen)}
                 className={`${navItem} ${
                   historyOpen
@@ -81,7 +114,7 @@ export function Layout({ children, history }: LayoutProps) {
         <main className="flex-1 h-full flex flex-col bg-transparent min-w-0">
           <header className="h-12 bg-[#0c1118] border-b border-[#1e2d45] px-6 flex items-center justify-between">
             <div className="text-[13px] font-['Geist_Mono'] font-semibold text-[#8896ac] uppercase tracking-[0.12em]">
-              PROSPECÇÃO
+              {headerTitle}
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -95,7 +128,7 @@ export function Layout({ children, history }: LayoutProps) {
 
           <div className="flex-1 flex min-h-0">
             <div className="flex-1 flex flex-col min-w-0">{children}</div>
-            {historyOpen ? history : null}
+            {historyOpen && activeView === "search" ? history : null}
           </div>
         </main>
       </div>

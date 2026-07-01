@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { api, type HistoryRecord } from "../api";
+import { api, type HistoryDetail, type HistoryRecord } from "../api";
 import { useAppStore } from "../store";
 
 function formatRelative(value: string) {
@@ -19,11 +19,26 @@ function formatRelative(value: string) {
 
 export function HistoryPanel() {
   const currentParams = useAppStore((state) => state.searchParams);
+  const openSavedLeads = useAppStore((state) => state.openSavedLeads);
   const { data = [] } = useQuery({
     queryKey: ["history"],
     queryFn: () => api.get<HistoryRecord[]>("/history").then((response) => response.data),
     refetchInterval: 5000,
   });
+
+  async function handleOpen(item: HistoryRecord) {
+    const response = await api.get<HistoryDetail>(`/history/${item.id}`);
+    openSavedLeads(
+      {
+        segmento: response.data.keyword,
+        cidade: response.data.city,
+        estado: response.data.state,
+        prospectador: response.data.prospectador,
+      },
+      response.data.leads,
+      item.id,
+    );
+  }
 
   return (
     <div className="w-72 h-full bg-[#0c1118] border-l border-[#1e2d45] flex flex-col">
@@ -48,6 +63,7 @@ export function HistoryPanel() {
               <button
                 type="button"
                 key={item.id}
+                onClick={() => handleOpen(item)}
                 className={`w-full text-left px-4 py-3 border-b border-[#162035] cursor-pointer hover:bg-[#0f1623] transition-colors duration-100 ${
                   active ? "border-l-2 border-l-[#2563eb] bg-[#0f1623]" : ""
                 }`}

@@ -1,6 +1,10 @@
 import axios from "axios";
 
 export interface Lead {
+  id?: number | null;
+  history_id?: number | null;
+  source_history_id?: number | null;
+  source_lead_id?: number | null;
   nome: string;
   categoria: string;
   nota: number | null;
@@ -17,6 +21,16 @@ export interface Lead {
   cidade: string;
   estado: string;
   prospectador: string;
+}
+
+export interface SelectedLead extends Lead {
+  id: number;
+  segmento: string;
+  notes: string;
+  custom_message: string;
+  last_message_updated_at: string | null;
+  selected_at: string;
+  updated_at: string;
 }
 
 export interface SearchRequest {
@@ -45,6 +59,15 @@ export interface HistoryRecord {
   leads_found: number;
   prospectador: string;
   created_at: string;
+}
+
+export interface HistoryDetail extends HistoryRecord {
+  leads: Lead[];
+}
+
+export interface MessageTemplateResponse {
+  template: string;
+  leads?: SelectedLead[];
 }
 
 export const api = axios.create({ baseURL: "http://127.0.0.1:8000" });

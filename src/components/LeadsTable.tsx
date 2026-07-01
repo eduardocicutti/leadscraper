@@ -1,7 +1,8 @@
-import { Download, ExternalLink, MapPin } from "lucide-react";
+import { Download, ExternalLink, MapPin, Save } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Lead } from "../api";
-import { useAppStore } from "../store";
+import { leadKey, useAppStore } from "../store";
 
 function tempBadge(classificacao: string) {
   if (classificacao.includes("Quente")) {
@@ -58,13 +59,33 @@ function LinkCell({
 }
 
 export function LeadsTable() {
+  const queryClient = useQueryClient();
   const leads = useAppStore((state) => state.leads);
   const status = useAppStore((state) => state.status);
   const jobId = useAppStore((state) => state.jobId);
   const searchParams = useAppStore((state) => state.searchParams);
+  const selectedLeadKeys = useAppStore((state) => state.selectedLeadKeys);
+  const toggleLeadSelection = useAppStore((state) => state.toggleLeadSelection);
+  const clearLeadSelection = useAppStore((state) => state.clearLeadSelection);
+
+  const selectedLeads = leads.filter((lead) => selectedLeadKeys.includes(leadKey(lead)));
 
   async function handleDownload() {
     if (!jobId || !searchParams) return;
+
+    if (jobId.startsWith("history:")) {
+      const historyId = jobId.replace("history:", "");
+      const response = await api.get(`/history/${historyId}/download`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `leads_${searchParams.segmento}_${searchParams.cidade}.xlsx`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
 
     const query = new URLSearchParams(searchParams).toString();
     const response = await api.get(`/download/${jobId}?${query}`, {
@@ -78,6 +99,13 @@ export function LeadsTable() {
     URL.revokeObjectURL(url);
   }
 
+  async function handleSaveSelected() {
+    if (selectedLeads.length === 0) return;
+    await api.post("/selected-leads", { leads: selectedLeads });
+    clearLeadSelection();
+    await queryClient.invalidateQueries({ queryKey: ["selected-leads"] });
+  }
+
   const headerClass =
     "sticky top-0 bg-[#0c1118] text-[10px] font-semibold text-[#4a5568] uppercase tracking-[0.1em] border-b border-[#1e2d45] px-3 py-2 text-left";
   const cellClass =
@@ -89,15 +117,26 @@ export function LeadsTable() {
         <span className="text-[11px] font-semibold text-[#4a5568] uppercase tracking-[0.1em]">
           Resultados
         </span>
-        {status === "done" ? (
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="h-8 px-3 bg-[#0f1623] hover:bg-[#162035] border border-[#1e2d45] text-[#e8edf5] text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors duration-100"
-          >
-            <Download className="w-3.5 h-3.5" /> Exportar .xlsx
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {selectedLeads.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleSaveSelected}
+              className="h-8 px-3 bg-[#0f1623] hover:bg-[#162035] border border-[#1e2d45] text-[#e8edf5] text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors duration-100"
+            >
+              <Save className="w-3.5 h-3.5" /> Salvar {selectedLeads.length}
+            </button>
+          ) : null}
+          {status === "done" && jobId ? (
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="h-8 px-3 bg-[#0f1623] hover:bg-[#162035] border border-[#1e2d45] text-[#e8edf5] text-xs font-medium rounded-md flex items-center gap-1.5 transition-colors duration-100"
+            >
+              <Download className="w-3.5 h-3.5" /> Exportar .xlsx
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {leads.length === 0 ? (
@@ -109,6 +148,7 @@ export function LeadsTable() {
           <table className="w-full border-collapse">
             <thead>
               <tr>
+                <th className={`${headerClass} w-12`}>Sel.</th>
                 <th className={`${headerClass} w-20`}>Temp.</th>
                 <th className={`${headerClass} w-16`}>Score</th>
                 <th className={`${headerClass} w-[220px]`}>Empresa</th>
@@ -125,11 +165,22 @@ export function LeadsTable() {
             <tbody>
               {leads.map((lead: Lead, index) => {
                 const badge = tempBadge(lead.classificacao);
+                const key = leadKey(lead);
+                const checked = selectedLeadKeys.includes(key);
                 return (
                   <tr
                     key={`${lead.nome}-${lead.url_maps}-${index}`}
                     className="border-b border-[#162035] hover:bg-[#0f1623] transition-colors duration-100"
                   >
+                    <td className={cellClass}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleLeadSelection(key)}
+                        aria-label="Selecionar lead"
+                        className="h-4 w-4 accent-[#2563eb]"
+                      />
+                    </td>
                     <td className={cellClass}>
                       <span
                         className={`px-1.5 py-0.5 rounded-sm text-[10px] font-mono font-medium border ${badge.className}`}

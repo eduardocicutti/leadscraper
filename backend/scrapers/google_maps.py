@@ -9,6 +9,7 @@ from backend.ports.browser import BrowserPort
 
 MAPS_PLACE_LINK = 'a[href*="/maps/place/"]'
 RESULTS_FEED = '[role="feed"]'
+SHORT = 500
 
 
 class GoogleMapsScraper:
@@ -21,12 +22,27 @@ class GoogleMapsScraper:
         url = f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
         logger.info("Opening Google Maps for job %s: %s", self._job_id, query)
         self._browser.goto(url)
-        self._browser.wait(4)
+        if not self._browser.wait_for_selector(RESULTS_FEED, timeout_ms=8000):
+            self._browser.wait(1.5)
 
-        for attempt in range(6):
+        hrefs: list[str] = []
+        seen: set[str] = set()
+        stale_rounds = 0
+
+        for attempt in range(8):
+            for href in self._browser.query_all_hrefs(MAPS_PLACE_LINK):
+                if href not in seen and "/maps/place/" in href:
+                    seen.add(href)
+                    hrefs.append(href)
+                if len(hrefs) >= max_results:
+                    break
+
+            if len(hrefs) >= max_results:
+                break
+
+            previous_count = len(hrefs)
             try:
                 self._browser.scroll_selector(RESULTS_FEED, 1000)
-                self._browser.wait(1.5)
             except Exception as exc:
                 logger.warning(
                     "Could not scroll results panel on attempt %s for job %s: %s",
@@ -35,18 +51,25 @@ class GoogleMapsScraper:
                     exc,
                 )
                 break
+            self._browser.wait_for_selector(MAPS_PLACE_LINK, timeout_ms=1500)
 
-        hrefs: list[str] = []
-        seen: set[str] = set()
-        for href in self._browser.query_all_hrefs(MAPS_PLACE_LINK):
-            if href not in seen and "/maps/place/" in href:
-                seen.add(href)
-                hrefs.append(href)
+            for href in self._browser.query_all_hrefs(MAPS_PLACE_LINK):
+                if href not in seen and "/maps/place/" in href:
+                    seen.add(href)
+                    hrefs.append(href)
+
+            if len(hrefs) == previous_count:
+                stale_rounds += 1
+                if stale_rounds >= 2:
+                    break
+            else:
+                stale_rounds = 0
+
             if len(hrefs) >= max_results:
                 break
 
         logger.info("Job %s found %s candidate URLs", self._job_id, len(hrefs))
-        return hrefs
+        return hrefs[:max_results]
 
     def extract_lead(
         self,
@@ -57,21 +80,23 @@ class GoogleMapsScraper:
         prospectador: str,
     ) -> dict:
         self._browser.goto(place_url)
-        self._browser.wait(2.5)
+        if not self._browser.wait_for_selector("h1", timeout_ms=5000):
+            self._browser.wait(0.8)
 
         nome = self._safe(
             self._browser.title().replace(" - Google Maps", "").strip(),
             "company name",
-            lambda: self._browser.query_text("h1").strip(),
+            lambda: self._browser.query_text("h1", timeout_ms=SHORT).strip(),
         )
 
         nota = self._safe(
             None,
             "rating",
             lambda: float(
-                self._browser.query_text('div[jsaction*="pane.rating"] span[aria-hidden="true"]').replace(
-                    ",", "."
-                )
+                self._browser.query_text(
+                    'div[jsaction*="pane.rating"] span[aria-hidden="true"]',
+                    timeout_ms=SHORT,
+                ).replace(",", ".")
             ),
         )
         if nota is None:
@@ -88,9 +113,9 @@ class GoogleMapsScraper:
         endereco = self._safe(
             None,
             "address",
-            lambda: self._browser.query_attr('button[data-item-id="address"]', "aria-label").replace(
-                "Endereço: ", ""
-            ),
+            lambda: self._browser.query_attr(
+                'button[data-item-id="address"]', "aria-label", timeout_ms=SHORT
+            ).replace("Endereço: ", ""),
         )
         if endereco is None:
             endereco = self._safe(
@@ -99,13 +124,16 @@ class GoogleMapsScraper:
                 lambda: self._browser.query_attr_xpath(
                     '//button[@data-tooltip="Copiar endereço"]',
                     "aria-label",
+                    timeout_ms=SHORT,
                 ),
             )
 
         telefone = self._safe(
             None,
             "phone",
-            lambda: self._browser.query_attr('button[data-item-id*="phone"]', "aria-label")
+            lambda: self._browser.query_attr(
+                'button[data-item-id*="phone"]', "aria-label", timeout_ms=SHORT
+            )
             .replace("Número de telefone: ", "")
             .strip(),
         )
@@ -116,6 +144,7 @@ class GoogleMapsScraper:
                 lambda: self._browser.query_attr_xpath(
                     '//button[contains(@aria-label,"telefone") or contains(@aria-label,"phone")]',
                     "aria-label",
+                    timeout_ms=SHORT,
                 ).strip(),
             )
 
@@ -124,7 +153,7 @@ class GoogleMapsScraper:
         site = self._safe(
             None,
             "website",
-            lambda: self._browser.query_attr('a[data-item-id="authority"]', "href"),
+            lambda: self._browser.query_attr('a[data-item-id="authority"]', "href", timeout_ms=SHORT),
         )
         if site is None:
             site = self._safe(
@@ -133,13 +162,14 @@ class GoogleMapsScraper:
                 lambda: self._browser.query_attr_xpath(
                     '//a[contains(@aria-label,"Site")]',
                     "href",
+                    timeout_ms=SHORT,
                 ),
             )
 
         categoria = self._safe(
             None,
             "category",
-            lambda: self._browser.query_text("button.DkEaL").strip(),
+            lambda: self._browser.query_text("button.DkEaL", timeout_ms=SHORT).strip(),
         )
 
         porte = classify_porte(nome, categoria or segmento, avaliacoes or 0)
@@ -167,18 +197,25 @@ class GoogleMapsScraper:
         return lead
 
     def _rating_from_aria(self) -> float | None:
-        aria_label = self._browser.query_attr('span[aria-label*="estrela"]', "aria-label") or ""
+        aria_label = (
+            self._browser.query_attr('span[aria-label*="estrela"]', "aria-label", timeout_ms=SHORT)
+            or ""
+        )
         match = re.search(r"(\d[.,]\d)", aria_label)
         return float(match.group(1).replace(",", ".")) if match else None
 
     def _reviews_from_button(self) -> int | None:
-        text = self._browser.query_text('button[jsaction*="pane.rating.moreReviews"] span')
+        text = self._browser.query_text(
+            'button[jsaction*="pane.rating.moreReviews"] span',
+            timeout_ms=SHORT,
+        )
         nums = re.findall(r"\d+", text.replace(".", "").replace(",", ""))
         return int(nums[0]) if nums else None
 
     def _reviews_from_text(self) -> int | None:
         text = self._browser.query_text_xpath(
-            '//span[contains(text(),"avaliações") or contains(text(),"avaliação")]'
+            '//span[contains(text(),"avaliações") or contains(text(),"avaliação")]',
+            timeout_ms=SHORT,
         )
         nums = re.findall(r"\d+", text.replace(".", "").replace(",", ""))
         return int(nums[0]) if nums else None
