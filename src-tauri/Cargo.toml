@@ -1,7 +1,7 @@
 [package]
 name = "lead-scraper"
 version = "0.2.0"
-description = "Lead Scraper Desktop"
+description = "Lead Scraper Desktop v0.2.0"
 authors = ["Adapti JE"]
 edition = "2021"
 
