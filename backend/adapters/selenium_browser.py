@@ -48,6 +48,19 @@ class SeleniumBrowser:
 
         time.sleep(seconds)
 
+    def wait_for_selector(self, selector: str, timeout_ms: int = 5000) -> bool:
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support.ui import WebDriverWait
+
+        try:
+            WebDriverWait(self._require_driver(), timeout_ms / 1000).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+            )
+            return True
+        except Exception:
+            return False
+
     def scroll_selector(self, selector: str, pixels: int) -> None:
         from selenium.webdriver.common.by import By
 
@@ -72,24 +85,28 @@ class SeleniumBrowser:
                 logger.debug("Could not read href from element: %s", exc, exc_info=True)
         return hrefs
 
-    def query_text(self, selector: str) -> str | None:
+    def query_text(self, selector: str, timeout_ms: int | None = None) -> str | None:
         from selenium.webdriver.common.by import By
 
         return self._require_driver().find_element(By.CSS_SELECTOR, selector).text
 
-    def query_attr(self, selector: str, attribute: str) -> str | None:
+    def query_attr(
+        self, selector: str, attribute: str, timeout_ms: int | None = None
+    ) -> str | None:
         from selenium.webdriver.common.by import By
 
         return self._require_driver().find_element(By.CSS_SELECTOR, selector).get_attribute(
             attribute
         )
 
-    def query_text_xpath(self, xpath: str) -> str | None:
+    def query_text_xpath(self, xpath: str, timeout_ms: int | None = None) -> str | None:
         from selenium.webdriver.common.by import By
 
         return self._require_driver().find_element(By.XPATH, xpath).text
 
-    def query_attr_xpath(self, xpath: str, attribute: str) -> str | None:
+    def query_attr_xpath(
+        self, xpath: str, attribute: str, timeout_ms: int | None = None
+    ) -> str | None:
         from selenium.webdriver.common.by import By
 
         return self._require_driver().find_element(By.XPATH, xpath).get_attribute(attribute)
