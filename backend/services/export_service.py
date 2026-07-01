@@ -5,6 +5,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from backend.domain.whatsapp import format_phone_br
+
 
 def generate_xlsx(
     leads: list,
@@ -113,11 +115,8 @@ def generate_xlsx(
         elif "Morno" in clf:
             row_fill = morno_fill
         else:
-            row_fill = frio_fill
-
-        tel = lead.get("telefone") or ""
-        is_wa = lead.get("is_whatsapp", False)
-        tel_display = f"{'📱 ' if is_wa else ''}{tel}"
+            row_fill = frio_fill
+        tel_display = format_phone_br(lead.get("telefone"))
 
         row_values = [
             prospectador,
