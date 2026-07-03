@@ -43,9 +43,30 @@ def _migrate_schema() -> None:
     if engine is None:
         return
     migrations = [
+        ("selectedlead", "source_history_id", "INTEGER"),
+        ("selectedlead", "source_lead_id", "INTEGER"),
+        ("selectedlead", "phone", "TEXT"),
+        ("selectedlead", "normalized_phone", "TEXT"),
+        ("selectedlead", "is_whatsapp", "BOOLEAN DEFAULT 0"),
+        ("selectedlead", "whatsapp_link", "TEXT"),
+        ("selectedlead", "website", "TEXT"),
+        ("selectedlead", "address", "TEXT"),
+        ("selectedlead", "rating", "FLOAT"),
+        ("selectedlead", "review_count", "INTEGER"),
+        ("selectedlead", "category", "TEXT"),
+        ("selectedlead", "porte", "TEXT"),
+        ("selectedlead", "score", "INTEGER DEFAULT 0"),
+        ("selectedlead", "classificacao", "TEXT"),
+        ("selectedlead", "maps_url", "TEXT"),
         ("selectedlead", "segmento", "TEXT"),
+        ("selectedlead", "city", "TEXT"),
+        ("selectedlead", "state", "TEXT"),
+        ("selectedlead", "prospectador", "TEXT"),
+        ("selectedlead", "notes", "TEXT DEFAULT ''"),
         ("selectedlead", "custom_message", "TEXT DEFAULT ''"),
         ("selectedlead", "last_message_updated_at", "DATETIME"),
+        ("selectedlead", "selected_at", "DATETIME"),
+        ("selectedlead", "updated_at", "DATETIME"),
     ]
     with engine.connect() as conn:
         for table, column, col_type in migrations:
@@ -54,6 +75,22 @@ def _migrate_schema() -> None:
                 conn.commit()
             except Exception:
                 pass
+        try:
+            conn.execute(
+                text(
+                    """
+                    UPDATE selectedlead
+                    SET
+                        notes = COALESCE(notes, ''),
+                        custom_message = COALESCE(custom_message, ''),
+                        selected_at = COALESCE(selected_at, CURRENT_TIMESTAMP),
+                        updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+                    """
+                )
+            )
+            conn.commit()
+        except Exception:
+            pass
 
 
 def _whatsapp_link_for(record: SelectedLead, template: str) -> str:
@@ -427,6 +464,10 @@ def list_selected_leads() -> list[dict]:
 
 def update_selected_lead(lead_id: int, data: dict) -> dict | None:
     ensure_db_ready()
+    should_refresh_link = (
+        data.get("prospectador") is not None or data.get("custom_message") is not None
+    )
+    current_template = get_message_template() if should_refresh_link else ""
     with db_lock:
         with Session(engine) as session:
             record = session.get(SelectedLead, lead_id)
@@ -438,7 +479,12 @@ def update_selected_lead(lead_id: int, data: dict) -> dict | None:
                 record.prospectador = data["prospectador"]
             if "custom_message" in data and data["custom_message"] is not None:
                 record.custom_message = data["custom_message"]
-            record.updated_at = datetime.now()
+            now = datetime.now()
+            if should_refresh_link:
+                record.whatsapp_link = _whatsapp_link_for(record, current_template)
+                if record.whatsapp_link:
+                    record.last_message_updated_at = now
+            record.updated_at = now
             session.add(record)
             session.commit()
             session.refresh(record)

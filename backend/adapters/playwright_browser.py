@@ -81,32 +81,24 @@ class PlaywrightBrowser:
         return hrefs
 
     def query_text(self, selector: str, timeout_ms: int | None = None) -> str | None:
-        locator = self._require_page().locator(selector).first
-        if timeout_ms is not None:
-            locator = locator.set_timeout(timeout_ms)
-        return locator.inner_text()
+        kwargs = {"timeout": timeout_ms} if timeout_ms is not None else {}
+        return self._require_page().locator(selector).first.inner_text(**kwargs)
 
     def query_attr(
         self, selector: str, attribute: str, timeout_ms: int | None = None
     ) -> str | None:
-        locator = self._require_page().locator(selector).first
-        if timeout_ms is not None:
-            locator = locator.set_timeout(timeout_ms)
-        return locator.get_attribute(attribute)
+        kwargs = {"timeout": timeout_ms} if timeout_ms is not None else {}
+        return self._require_page().locator(selector).first.get_attribute(attribute, **kwargs)
 
     def query_text_xpath(self, xpath: str, timeout_ms: int | None = None) -> str | None:
-        locator = self._require_page().locator(f"xpath={xpath}").first
-        if timeout_ms is not None:
-            locator = locator.set_timeout(timeout_ms)
-        return locator.inner_text()
+        kwargs = {"timeout": timeout_ms} if timeout_ms is not None else {}
+        return self._require_page().locator(f"xpath={xpath}").first.inner_text(**kwargs)
 
     def query_attr_xpath(
         self, xpath: str, attribute: str, timeout_ms: int | None = None
     ) -> str | None:
-        locator = self._require_page().locator(f"xpath={xpath}").first
-        if timeout_ms is not None:
-            locator = locator.set_timeout(timeout_ms)
-        return locator.get_attribute(attribute)
+        kwargs = {"timeout": timeout_ms} if timeout_ms is not None else {}
+        return self._require_page().locator(f"xpath={xpath}").first.get_attribute(attribute, **kwargs)
 
     def close(self) -> None:
         try:
