@@ -94,9 +94,33 @@ O instalador `.exe` é gerado em `src-tauri/target/release/bundle/`.
 1. Selecione o **prospectador** no formulário (as iniciais aparecem no avatar da sidebar).
 2. Informe **segmento**, **cidade**, **estado** e **quantidade** de leads.
 3. Clique em **Iniciar extração** e acompanhe o progresso na barra de status.
-4. Ao concluir, revise a tabela e clique em **Exportar .xlsx**.
+4. Ao concluir, revise a tabela, marque leads com **checkbox** e clique em **Salvar selecionados** para a Lista Preferencial.
+5. Exporte a busca atual com **Exportar .xlsx**.
 
-O histórico de buscas fica no painel lateral (ícone de relógio).
+### Menu lateral
+
+| Ícone | Tela | Função |
+|-------|------|--------|
+| Lupa | Prospecção | Nova extração e resultados |
+| Estrela | Lista Preferencial | Leads salvos, mensagem base, envio via WhatsApp |
+| Arquivo | Prospecções Passadas | Histórico completo: abrir, exportar, reler, excluir |
+| Relógio | Histórico rápido | Painel lateral para reabrir buscas recentes |
+
+### Lista Preferencial
+
+- Salve leads de várias buscas sem duplicar (por URL do Maps, telefone ou nome + cidade).
+- Edite a **mensagem base** com variáveis: `{empresa}`, `{segmento}`, `{cidade}`, `{estado}`, `{prospectador}`.
+- Clique em **Atualizar links** para regenerar os links do WhatsApp.
+- Opcionalmente, defina uma **mensagem customizada** por lead.
+- Use **Enviar** para abrir o WhatsApp com a mensagem preenchida.
+
+### Prospecções passadas
+
+- Filtre buscas por segmento, cidade, estado e status.
+- **Abrir** — reabre a busca como se tivesse acabado de extrair.
+- **Exportar** — gera planilha `.xlsx` do histórico.
+- **Reler** — reabre cada lead no Maps e atualiza telefone, site, nota, score etc.
+- Selecione várias prospecções e use **Reler N** para releitura em lote (com dedupe).
 
 ---
 
@@ -104,9 +128,11 @@ O histórico de buscas fica no painel lateral (ícone de relógio).
 
 A exportação gera um `.xlsx` com três abas:
 
-- **Página1** — leads com colunas de CRM (responsável, estágio, empresa, telefone, ramo, porte, nota, score, temperatura, links).
+- **Página1** — leads com colunas de CRM (responsável, estágio, empresa, telefone formatado, ramo, porte, nota, score, temperatura, link WhatsApp, links).
 - **Score** — legenda do sistema de pontuação.
 - **Resumo** — totais da coleta (quentes, mornos, frios, WhatsApp, sites).
+
+A coluna de telefone exporta apenas o número formatado: celular `(XX) XXXXX-XXXX`, fixo `(XX) XXXX-XXXX`. O link do WhatsApp fica em coluna separada.
 
 ---
 
@@ -132,8 +158,20 @@ A exportação gera um `.xlsx` com três abas:
 |--------|------|-----------|
 | `POST` | `/scrape` | Inicia uma busca |
 | `GET` | `/status/{job_id}` | Progresso e leads em tempo real |
-| `GET` | `/download/{job_id}` | Download do Excel |
+| `GET` | `/download/{job_id}` | Download do Excel (job ativo) |
 | `GET` | `/history` | Últimas 50 buscas |
+| `GET` | `/history/{id}` | Detalhe de uma busca + leads |
+| `POST` | `/history/{id}/refresh` | Releitura assíncrona dos leads salvos |
+| `POST` | `/history/refresh-batch` | Releitura em lote (`history_ids`) |
+| `DELETE` | `/history/{id}` | Exclui uma prospecção |
+| `GET` | `/history/{id}/download` | Exporta planilha do histórico |
+| `GET` | `/selected-leads` | Lista leads da Lista Preferencial |
+| `POST` | `/selected-leads` | Salva leads selecionados |
+| `PATCH` | `/selected-leads/{id}` | Edita notas, prospectador ou mensagem customizada |
+| `DELETE` | `/selected-leads/{id}` | Remove da lista |
+| `GET/PUT` | `/selected-leads/message-template` | Template global de mensagem |
+| `POST` | `/selected-leads/refresh-links` | Atualiza links WhatsApp em lote |
+| `POST` | `/selected-leads/{id}/refresh-message` | Atualiza link WhatsApp de um lead |
 | `GET` | `/health` | Health check (usado pelo Tauri) |
 
 ---
@@ -149,7 +187,7 @@ lead_scraper/
 │   ├── ports/           # interfaces (BrowserPort)
 │   ├── repositories/    # SQLite
 │   ├── scrapers/        # Google Maps
-│   └── services/        # orquestração, export, jobs
+│   └── services/        # orquestração, export, jobs, releitura
 ├── src/                 # Frontend React
 ├── src-tauri/           # Shell Tauri + sidecar
 ├── main.py              # Entry point do backend

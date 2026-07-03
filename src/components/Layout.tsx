@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Archive, History, Search, Settings, Star, X } from "lucide-react";
 import { useAppStore } from "../store";
 import { getInitials } from "../utils/initials";
+import { APP_TITLE, APP_VERSION } from "../version";
 
 interface LayoutProps {
   children: ReactNode;
@@ -27,6 +28,10 @@ export function Layout({ children, history }: LayoutProps) {
       : activeView === "history"
         ? "PROSPECÇÕES PASSADAS"
         : "PROSPECÇÃO";
+
+  useEffect(() => {
+    document.title = APP_TITLE;
+  }, []);
 
   return (
     <div className="min-h-screen w-full bg-[#0c1118] text-[#e8edf5] font-sans">
@@ -155,7 +160,10 @@ export function Layout({ children, history }: LayoutProps) {
                 <div className="text-base font-['Geist_Mono'] font-semibold text-[#e8edf5] uppercase tracking-[0.08em]">
                   Lead Scraper
                 </div>
-                <div className="mt-1 text-[12px] text-[#4a5568] font-['JetBrains_Mono']">
+                <div className="mt-1 text-[12px] text-[#8896ac] font-['JetBrains_Mono']">
+                  Versão {APP_VERSION}
+                </div>
+                <div className="mt-0.5 text-[12px] text-[#4a5568] font-['JetBrains_Mono']">
                   Desenvolvido por Eduardo
                 </div>
               </div>
