@@ -11,7 +11,16 @@ hiddenimports = (
     + collect_submodules("greenlet")
 )
 
-excludes = ["selenium", "webdriver_manager"]
+excludes = [
+    "selenium",
+    "webdriver_manager",
+    "pytest",
+    "_pytest",
+    "py",
+    "pygments",
+    "httpx",
+    "sqlalchemy.testing",
+]
 
 a = Analysis(
     ["main.py"],

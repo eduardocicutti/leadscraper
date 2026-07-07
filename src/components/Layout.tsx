@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Archive, History, Search, Settings, Star, X } from "lucide-react";
+import { api, type DiagnosticsResponse } from "../api";
 import { useAppStore } from "../store";
 import { getInitials } from "../utils/initials";
 import { APP_TITLE, APP_VERSION } from "../version";
@@ -18,6 +20,12 @@ export function Layout({ children, history }: LayoutProps) {
   const prospectador = useAppStore((state) => state.prospectador);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const avatarInitials = getInitials(prospectador);
+
+  const diagnosticsQuery = useQuery({
+    queryKey: ["diagnostics"],
+    queryFn: () => api.get<DiagnosticsResponse>("/diagnostics").then((r) => r.data),
+    enabled: settingsOpen,
+  });
 
   const navItem =
     "w-8 h-8 rounded-md flex items-center justify-center transition-colors duration-100";
@@ -140,7 +148,7 @@ export function Layout({ children, history }: LayoutProps) {
 
       {settingsOpen ? (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0c1118]/80">
-          <section className="w-[420px] rounded-lg border border-[#1e2d45] bg-[#0f1623]">
+          <section className="w-[520px] rounded-lg border border-[#1e2d45] bg-[#0f1623]">
             <div className="h-10 px-4 border-b border-[#162035] flex items-center justify-between">
               <span className="text-[11px] font-semibold text-[#4a5568] uppercase tracking-[0.1em]">
                 Sobre
@@ -181,6 +189,33 @@ export function Layout({ children, history }: LayoutProps) {
                 <div className="mt-1 text-[12px] text-[#8896ac] font-['JetBrains_Mono']">
                   FastAPI em http://localhost:8000
                 </div>
+              </div>
+
+              <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3 space-y-2">
+                <div className="text-[10px] text-[#4a5568] uppercase tracking-[0.08em]">
+                  Diagnóstico
+                </div>
+                {diagnosticsQuery.isLoading ? (
+                  <div className="text-[12px] text-[#4a5568] font-['JetBrains_Mono']">
+                    carregando...
+                  </div>
+                ) : diagnosticsQuery.data ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2 text-[12px] font-['JetBrains_Mono'] text-[#8896ac]">
+                      <span>Histórico: {diagnosticsQuery.data.counts.history}</span>
+                      <span>Leads: {diagnosticsQuery.data.counts.leads}</span>
+                      <span>Preferenciais: {diagnosticsQuery.data.counts.selected_leads}</span>
+                      <span>Integridade: {diagnosticsQuery.data.integrity_check}</span>
+                    </div>
+                    <div className="break-all text-[11px] text-[#4a5568] font-['JetBrains_Mono']">
+                      {diagnosticsQuery.data.db_path}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[12px] text-[#fca5a5] font-['JetBrains_Mono']">
+                    diagnóstico indisponível
+                  </div>
+                )}
               </div>
             </div>
           </section>

@@ -67,7 +67,52 @@ export interface HistoryDetail extends HistoryRecord {
 
 export interface MessageTemplateResponse {
   template: string;
+  segmento?: string;
   leads?: SelectedLead[];
+}
+
+export interface SelectedLeadFilters {
+  segmento: string;
+  cidade: string;
+  estado: string;
+  temperatura: string;
+  com_whatsapp: string;
+  com_site: string;
+  prospectador: string;
+}
+
+export interface ImportSelectedLeadsResponse {
+  imported_count: number;
+  skipped_count: number;
+  rows_read: number;
+  columns_detected: string[];
+  imported: SelectedLead[];
+  skipped: Array<{
+    row: number;
+    reason: string;
+    nome: string;
+    existing_id?: number;
+    existing_nome?: string;
+  }>;
+}
+
+export interface DiagnosticsResponse {
+  ok: boolean;
+  db_ready: boolean;
+  db_path: string;
+  db_exists: boolean;
+  db_size_bytes: number;
+  wal_size_bytes: number;
+  journal_mode: string;
+  synchronous: number | string;
+  integrity_check: string;
+  db_path_source: string;
+  counts: {
+    history: number;
+    leads: number;
+    selected_leads: number;
+    settings: number;
+  };
 }
 
 export const api = axios.create({ baseURL: "http://127.0.0.1:8000" });

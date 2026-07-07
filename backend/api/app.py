@@ -2,6 +2,7 @@ import io
 import os
 import threading
 import traceback
+import base64
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -14,12 +15,16 @@ from backend.api.schemas import (
     HistoryRefreshBatchRequest,
     MessageTemplateRequest,
     ScrapeRequest,
+    SegmentTemplateRequest,
+    SelectedLeadFilters,
     SelectedLeadsRequest,
     SelectedLeadUpdate,
+    SpreadsheetImportRequest,
 )
 from backend.core.logging import logger
 from backend.repositories import database
 from backend.services.export_service import generate_xlsx
+from backend.services.import_service import parse_leads_spreadsheet
 from backend.services.job_store import get_job, init_job
 from backend.services.refresh_service import refresh_history_worker, refresh_leads_worker
 from backend.services.scrape_service import scrape_worker
@@ -41,6 +46,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         logger.info("FastAPI lifespan shutdown triggered")
+        database.close_db()
 
 
 def create_app() -> FastAPI:
@@ -176,6 +182,15 @@ def create_app() -> FastAPI:
     async def health():
         return {"ok": True, "db_ready": database.is_db_ready()}
 
+    @app.get("/diagnostics")
+    async def diagnostics():
+        try:
+            return database.get_diagnostics()
+        except Exception:
+            logger.exception("Failed to load diagnostics")
+            traceback.print_exc()
+            return JSONResponse({"error": "Falha ao carregar diagnóstico."}, status_code=500)
+
     @app.get("/history")
     async def get_history():
         try:
@@ -280,6 +295,51 @@ def create_app() -> FastAPI:
             traceback.print_exc()
             return JSONResponse({"error": "Falha ao salvar leads selecionados."}, status_code=500)
 
+    @app.post("/selected-leads/import-spreadsheet")
+    async def import_selected_leads_spreadsheet(req: SpreadsheetImportRequest):
+        try:
+            content = base64.b64decode(req.content_base64)
+            parsed_leads, parse_meta = parse_leads_spreadsheet(
+                req.filename or "leads.xlsx",
+                content,
+                req.prospectador,
+            )
+            result = database.import_selected_leads(parsed_leads)
+            return {
+                **result,
+                "rows_read": parse_meta["rows_read"],
+                "columns_detected": parse_meta["columns_detected"],
+            }
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except Exception:
+            logger.exception("Failed to import selected leads from spreadsheet")
+            traceback.print_exc()
+            return JSONResponse({"error": "Falha ao importar planilha."}, status_code=500)
+
+    @app.post("/selected-leads/export")
+    async def export_selected_leads(req: SelectedLeadFilters):
+        try:
+            filters = req.model_dump()
+            leads = database.list_filtered_selected_leads(filters)
+            xlsx_bytes = generate_xlsx(
+                leads,
+                req.segmento or "lista_preferencial",
+                req.cidade,
+                req.estado,
+                req.prospectador,
+            )
+            filename = f"lista_preferencial_{datetime.now().strftime('%Y%m%d')}.xlsx"
+            return StreamingResponse(
+                io.BytesIO(xlsx_bytes),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        except Exception:
+            logger.exception("Failed to export selected leads")
+            traceback.print_exc()
+            return JSONResponse({"error": "Falha ao exportar lista preferencial."}, status_code=500)
+
     @app.patch("/selected-leads/{lead_id}")
     async def patch_selected_lead(lead_id: int, req: SelectedLeadUpdate):
         try:
@@ -304,8 +364,13 @@ def create_app() -> FastAPI:
             return JSONResponse({"error": "Falha ao remover lead."}, status_code=500)
 
     @app.get("/selected-leads/message-template")
-    async def get_message_template():
+    async def get_message_template(segmento: str = ""):
         try:
+            if segmento:
+                return {
+                    "segmento": segmento,
+                    "template": database.get_message_template_for_segment(segmento),
+                }
             return {"template": database.get_message_template()}
         except Exception:
             logger.exception("Failed to load message template")
@@ -315,11 +380,36 @@ def create_app() -> FastAPI:
     @app.put("/selected-leads/message-template")
     async def put_message_template(req: MessageTemplateRequest):
         try:
+            if req.segmento:
+                return {
+                    "segmento": req.segmento,
+                    "template": database.set_segment_template(req.segmento, req.template),
+                }
             return {"template": database.set_message_template(req.template)}
         except Exception:
             logger.exception("Failed to save message template")
             traceback.print_exc()
             return JSONResponse({"error": "Falha ao salvar template."}, status_code=500)
+
+    @app.get("/selected-leads/segment-templates")
+    async def get_segment_templates():
+        try:
+            return database.list_segment_templates()
+        except Exception:
+            logger.exception("Failed to list segment templates")
+            traceback.print_exc()
+            return JSONResponse({"error": "Falha ao carregar templates por segmento."}, status_code=500)
+
+    @app.put("/selected-leads/segment-templates")
+    async def put_segment_template(req: SegmentTemplateRequest):
+        try:
+            template = database.set_segment_template(req.segmento, req.template)
+            leads = database.refresh_selected_links()
+            return {"segmento": req.segmento, "template": template, "leads": leads}
+        except Exception:
+            logger.exception("Failed to save segment template")
+            traceback.print_exc()
+            return JSONResponse({"error": "Falha ao salvar template do segmento."}, status_code=500)
 
     @app.post("/selected-leads/{lead_id}/refresh-message")
     async def refresh_selected_lead_message(lead_id: int, req: MessageTemplateRequest | None = None):
@@ -337,7 +427,11 @@ def create_app() -> FastAPI:
     @app.post("/selected-leads/refresh-links")
     async def refresh_selected_links(req: MessageTemplateRequest | None = None):
         try:
-            template = req.template if req else None
+            if req and req.segmento:
+                database.set_segment_template(req.segmento, req.template)
+                template = None
+            else:
+                template = req.template if req else None
             leads = database.refresh_selected_links(template)
             return {"template": database.get_message_template(), "leads": leads}
         except Exception:
