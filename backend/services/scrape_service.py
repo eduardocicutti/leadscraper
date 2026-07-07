@@ -3,7 +3,7 @@ import traceback
 from backend.adapters.browser_factory import create_browser
 from backend.core.logging import logger
 from backend.repositories.database import (
-    save_leads_batch,
+    save_lead_incremental,
     save_search_history,
     update_search_history_status,
 )
@@ -73,6 +73,8 @@ def scrape_worker(
                     prospectador,
                 )
                 leads.append(lead)
+                if history_id is not None:
+                    save_lead_incremental(history_id, lead)
                 job["leads"] = sorted(leads, key=lambda item: item["score"], reverse=True)
                 job["progress"] = index + 1
                 job["log"] = f"Extraindo {index + 1}/{len(place_urls)}: {lead['nome']}"
@@ -92,7 +94,7 @@ def scrape_worker(
             job["status"] = "done"
             job["log"] = f"Concluído! {len(leads)} leads coletados."
             if history_id is not None:
-                save_leads_batch(history_id, job["leads"])
+                update_search_history_status(history_id, "done", len(leads))
             logger.info("Job %s completed with %s leads", job_id, len(leads))
         else:
             set_error("Nenhum lead encontrado. Tente outro segmento ou cidade.")

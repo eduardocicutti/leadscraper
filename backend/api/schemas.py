@@ -44,7 +44,29 @@ class SelectedLeadUpdate(BaseModel):
 
 class MessageTemplateRequest(BaseModel):
     template: str
+    segmento: str | None = None
+
+
+class SegmentTemplateRequest(BaseModel):
+    segmento: str
+    template: str
+
+
+class SelectedLeadFilters(BaseModel):
+    segmento: str = ""
+    cidade: str = ""
+    estado: str = ""
+    temperatura: str = ""
+    com_whatsapp: str = ""
+    com_site: str = ""
+    prospectador: str = ""
 
 
 class HistoryRefreshBatchRequest(BaseModel):
     history_ids: list[int]
+
+
+class SpreadsheetImportRequest(BaseModel):
+    filename: str
+    content_base64: str
+    prospectador: str = ""
