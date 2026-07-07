@@ -120,3 +120,33 @@ Padaria Sol;(11) 3333-4444;Campinas;SP;Padaria
             company_names = [sheet.cell(row=row, column=3).value for row in range(2, sheet.max_row + 1)]
             assert "Clínica Boa Vida" in company_names
             assert "Padaria Sol" not in company_names
+
+
+def test_backup_and_restore_round_trip_database():
+    with TemporaryDirectory() as tmp:
+        with make_client(tmp) as client:
+            content = """Nome da empresa;Telefone/WhatsApp;Cidade;UF;Ramo de atividade
+ClÃ­nica Boa Vida;(11) 91234-5678;SÃ£o Paulo;SP;ClÃ­nica
+"""
+            client.post("/selected-leads/import-spreadsheet", json=csv_payload(content))
+
+            backup = client.get("/backup")
+            assert backup.status_code == 200
+            assert len(backup.content) > 0
+
+            lead = client.get("/selected-leads").json()[0]
+            delete_response = client.delete(f"/selected-leads/{lead['id']}")
+            assert delete_response.status_code == 200
+            assert client.get("/selected-leads").json() == []
+
+            restore_response = client.post(
+                "/restore",
+                json={
+                    "filename": "backup.db",
+                    "content_base64": base64.b64encode(backup.content).decode("ascii"),
+                },
+            )
+            assert restore_response.status_code == 200
+            restored = client.get("/selected-leads").json()
+            assert len(restored) == 1
+            assert restored[0]["nome"] == "ClÃ­nica Boa Vida"

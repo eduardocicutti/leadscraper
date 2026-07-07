@@ -1,4 +1,6 @@
 import os
+import shutil
+import sqlite3
 import threading
 import traceback
 from datetime import datetime
@@ -62,6 +64,16 @@ def _checkpoint_wal() -> None:
             conn.execute(text("PRAGMA wal_checkpoint(FULL)"))
     except Exception:
         logger.debug("Could not checkpoint SQLite WAL", exc_info=True)
+
+
+def _checkpoint_wal_truncate() -> None:
+    if engine is None:
+        return
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+    except Exception:
+        logger.debug("Could not truncate SQLite WAL", exc_info=True)
 
 
 def _migrate_schema() -> None:
@@ -187,9 +199,70 @@ def is_db_ready() -> bool:
 def close_db() -> None:
     global engine
     if engine is not None:
-        _checkpoint_wal()
+        _checkpoint_wal_truncate()
         engine.dispose()
         engine = None
+
+
+def create_backup_bytes() -> tuple[bytes, str]:
+    ensure_db_ready()
+    if db_file_path is None:
+        raise RuntimeError("Database path is not configured")
+
+    with db_lock:
+        _checkpoint_wal_truncate()
+        content = db_file_path.read_bytes()
+
+    filename = f"lead-scraper-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
+    return content, filename
+
+
+def restore_backup_bytes(content: bytes, filename: str = "backup.db") -> dict:
+    global engine
+    ensure_db_ready()
+    if db_file_path is None:
+        raise RuntimeError("Database path is not configured")
+    if not content:
+        raise ValueError("Arquivo de backup vazio.")
+
+    target_path = db_file_path
+    restore_dir = target_path.parent
+    restore_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    temp_path = restore_dir / f".restore-{timestamp}.db"
+    previous_path = restore_dir / f"banco-before-restore-{timestamp}.db"
+
+    temp_path.write_bytes(content)
+    conn = None
+    try:
+        conn = sqlite3.connect(temp_path)
+        try:
+            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        finally:
+            conn.close()
+        if integrity != "ok":
+            temp_path.unlink(missing_ok=True)
+            raise ValueError(f"Backup invÃ¡lido: integrity_check={integrity}")
+    except sqlite3.DatabaseError as exc:
+        temp_path.unlink(missing_ok=True)
+        raise ValueError("Arquivo de backup invÃ¡lido ou corrompido.") from exc
+
+    with db_lock:
+        close_db()
+        for suffix in ("-wal", "-shm"):
+            Path(f"{target_path}{suffix}").unlink(missing_ok=True)
+        if target_path.exists():
+            shutil.copy2(target_path, previous_path)
+        shutil.copy2(temp_path, target_path)
+        temp_path.unlink(missing_ok=True)
+        init_db(str(target_path))
+
+    logger.info("Database restored from backup filename=%s path=%s", filename, target_path)
+    return {
+        "ok": True,
+        "db_path": str(target_path),
+        "previous_backup_path": str(previous_path) if previous_path.exists() else "",
+    }
 
 
 def lead_to_dict(lead: Lead, history: SearchHistory) -> dict:

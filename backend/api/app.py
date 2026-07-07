@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from backend.api.schemas import (
+    BackupRestoreRequest,
     HistoryRefreshBatchRequest,
     MessageTemplateRequest,
     ScrapeRequest,
@@ -190,6 +191,32 @@ def create_app() -> FastAPI:
             logger.exception("Failed to load diagnostics")
             traceback.print_exc()
             return JSONResponse({"error": "Falha ao carregar diagnóstico."}, status_code=500)
+
+    @app.get("/backup")
+    async def download_backup():
+        try:
+            content, filename = database.create_backup_bytes()
+            return StreamingResponse(
+                io.BytesIO(content),
+                media_type="application/octet-stream",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        except Exception:
+            logger.exception("Failed to create database backup")
+            traceback.print_exc()
+            return JSONResponse({"error": "Falha ao gerar backup."}, status_code=500)
+
+    @app.post("/restore")
+    async def restore_backup(req: BackupRestoreRequest):
+        try:
+            content = base64.b64decode(req.content_base64)
+            return database.restore_backup_bytes(content, req.filename)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        except Exception:
+            logger.exception("Failed to restore database backup")
+            traceback.print_exc()
+            return JSONResponse({"error": "Falha ao restaurar backup."}, status_code=500)
 
     @app.get("/history")
     async def get_history():
