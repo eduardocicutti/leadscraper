@@ -70,3 +70,8 @@ class SpreadsheetImportRequest(BaseModel):
     filename: str
     content_base64: str
     prospectador: str = ""
+
+
+class BackupRestoreRequest(BaseModel):
+    filename: str = "lead-scraper-backup.db"
+    content_base64: str

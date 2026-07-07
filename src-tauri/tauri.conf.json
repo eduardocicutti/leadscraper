@@ -1,6 +1,6 @@
 {
   "productName": "Lead Scraper",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "identifier": "com.leadscraper.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Lead Scraper 0.4.0",
+        "title": "Lead Scraper 0.5.0",
         "width": 1200,
         "height": 800,
         "minWidth": 960,
@@ -37,6 +37,17 @@
     ],
     "resources": {
       "binaries/ms-playwright/": "ms-playwright/"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFEMzcyRkZGN0E0NzYzOUQKUldTZFkwZDYveTgzclY0M0JXWVdIUnl1ckppT3RJR0NYaUh6VGFIOEt6a0FvbEJvTFdnN2krQVIK",
+      "endpoints": [
+        "https://github.com/eduardocicutti/leadscraper/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

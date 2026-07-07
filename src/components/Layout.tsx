@@ -1,8 +1,20 @@
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { Archive, History, Search, Settings, Star, X } from "lucide-react";
-import { api, type DiagnosticsResponse } from "../api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
+import { useEffect, useRef, useState } from "react";
+import {
+  Archive,
+  DatabaseBackup,
+  DownloadCloud,
+  History,
+  Search,
+  Settings,
+  Star,
+  Upload,
+  X,
+} from "lucide-react";
+import { api, type BackupRestoreResponse, type DiagnosticsResponse } from "../api";
 import { useAppStore } from "../store";
 import { getInitials } from "../utils/initials";
 import { APP_TITLE, APP_VERSION } from "../version";
@@ -13,12 +25,17 @@ interface LayoutProps {
 }
 
 export function Layout({ children, history }: LayoutProps) {
+  const queryClient = useQueryClient();
   const activeView = useAppStore((state) => state.activeView);
   const setActiveView = useAppStore((state) => state.setActiveView);
   const historyOpen = useAppStore((state) => state.historyOpen);
   const setHistoryOpen = useAppStore((state) => state.setHistoryOpen);
   const prospectador = useAppStore((state) => state.prospectador);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [backupMessage, setBackupMessage] = useState("");
+  const [updateMessage, setUpdateMessage] = useState("");
+  const [updateProgress, setUpdateProgress] = useState("");
+  const restoreInputRef = useRef<HTMLInputElement | null>(null);
   const avatarInitials = getInitials(prospectador);
 
   const diagnosticsQuery = useQuery({
@@ -29,6 +46,114 @@ export function Layout({ children, history }: LayoutProps) {
 
   const navItem =
     "w-8 h-8 rounded-md flex items-center justify-center transition-colors duration-100";
+
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        resolve(result.includes(",") ? result.split(",")[1] : result);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const backupMutation = useMutation({
+    mutationFn: () => api.get("/backup", { responseType: "blob" }),
+    onSuccess: (response) => {
+      const disposition = response.headers["content-disposition"] || "";
+      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+      const filename = filenameMatch?.[1] || `lead-scraper-backup-${APP_VERSION}.db`;
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setBackupMessage("Backup baixado com sucesso.");
+      diagnosticsQuery.refetch();
+    },
+    onError: () => setBackupMessage("Falha ao baixar backup."),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const content_base64 = await fileToBase64(file);
+      return api
+        .post<BackupRestoreResponse>("/restore", {
+          filename: file.name,
+          content_base64,
+        })
+        .then((r) => r.data);
+    },
+    onSuccess: () => {
+      setBackupMessage("Backup restaurado. Dados recarregados.");
+      queryClient.invalidateQueries();
+      diagnosticsQuery.refetch();
+    },
+    onError: () => setBackupMessage("Falha ao restaurar backup."),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      const isTauri = Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+      if (!isTauri) {
+        return "Atualização automática disponível apenas no aplicativo instalado.";
+      }
+
+      setUpdateProgress("Verificando...");
+      const update = await check();
+      if (!update) {
+        return "Você já está na versão mais recente.";
+      }
+
+      setUpdateProgress(`Baixando versão ${update.version}...`);
+      let downloaded = 0;
+      let total = 0;
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength || 0;
+          setUpdateProgress(total ? `Baixando 0 de ${Math.round(total / 1024 / 1024)} MB` : "Baixando...");
+        }
+        if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (total > 0) {
+            setUpdateProgress(
+              `Baixando ${Math.round(downloaded / 1024 / 1024)} de ${Math.round(total / 1024 / 1024)} MB`,
+            );
+          }
+        }
+        if (event.event === "Finished") {
+          setUpdateProgress("Instalando atualização...");
+        }
+      });
+
+      await relaunch();
+      return "Atualização instalada.";
+    },
+    onSuccess: (message) => {
+      setUpdateMessage(message);
+      setUpdateProgress("");
+    },
+    onError: () => {
+      setUpdateMessage("Não foi possível verificar atualizações agora.");
+      setUpdateProgress("");
+    },
+  });
+
+  function handleRestoreFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const confirmed = window.confirm(
+      "Restaurar este backup vai substituir os dados atuais. Um backup de segurança será criado antes da troca. Continuar?",
+    );
+    if (confirmed) {
+      setBackupMessage("");
+      restoreMutation.mutate(file);
+    }
+  }
 
   const headerTitle =
     activeView === "selected"
@@ -148,7 +273,7 @@ export function Layout({ children, history }: LayoutProps) {
 
       {settingsOpen ? (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0c1118]/80">
-          <section className="w-[520px] rounded-lg border border-[#1e2d45] bg-[#0f1623]">
+          <section className="w-[520px] max-h-[90vh] overflow-auto rounded-lg border border-[#1e2d45] bg-[#0f1623]">
             <div className="h-10 px-4 border-b border-[#162035] flex items-center justify-between">
               <span className="text-[11px] font-semibold text-[#4a5568] uppercase tracking-[0.1em]">
                 Sobre
@@ -216,6 +341,67 @@ export function Layout({ children, history }: LayoutProps) {
                     diagnóstico indisponível
                   </div>
                 )}
+              </div>
+
+              <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3 space-y-3">
+                <div className="text-[10px] text-[#4a5568] uppercase tracking-[0.08em]">
+                  Backup
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={backupMutation.isPending}
+                    onClick={() => backupMutation.mutate()}
+                    className="h-8 px-3 rounded-md border border-[#1e2d45] bg-[#0f1623] text-[12px] text-[#e8edf5] hover:bg-[#162035] disabled:text-[#4a5568] inline-flex items-center gap-1.5"
+                  >
+                    <DatabaseBackup className="w-3.5 h-3.5" />
+                    {backupMutation.isPending ? "Gerando" : "Baixar backup"}
+                  </button>
+                  <input
+                    ref={restoreInputRef}
+                    type="file"
+                    accept=".db,.sqlite,.sqlite3"
+                    onChange={handleRestoreFile}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={restoreMutation.isPending}
+                    onClick={() => restoreInputRef.current?.click()}
+                    className="h-8 px-3 rounded-md border border-[#1e2d45] bg-[#0f1623] text-[12px] text-[#e8edf5] hover:bg-[#162035] disabled:text-[#4a5568] inline-flex items-center gap-1.5"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    {restoreMutation.isPending ? "Restaurando" : "Restaurar backup"}
+                  </button>
+                </div>
+                {backupMessage ? (
+                  <div className="text-[11px] text-[#60a5fa] font-['JetBrains_Mono']">
+                    {backupMessage}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3 space-y-3">
+                <div className="text-[10px] text-[#4a5568] uppercase tracking-[0.08em]">
+                  Atualizações
+                </div>
+                <button
+                  type="button"
+                  disabled={updateMutation.isPending}
+                  onClick={() => {
+                    setUpdateMessage("");
+                    updateMutation.mutate();
+                  }}
+                  className="h-8 px-3 rounded-md border border-[#1e2d45] bg-[#0f1623] text-[12px] text-[#e8edf5] hover:bg-[#162035] disabled:text-[#4a5568] inline-flex items-center gap-1.5"
+                >
+                  <DownloadCloud className="w-3.5 h-3.5" />
+                  {updateMutation.isPending ? "Verificando" : "Verificar atualização"}
+                </button>
+                {updateProgress || updateMessage ? (
+                  <div className="text-[11px] text-[#60a5fa] font-['JetBrains_Mono']">
+                    {updateProgress || updateMessage}
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>
