@@ -61,7 +61,6 @@ export const NAVEGACAO: ItemNavegacao[] = [
     descricao: "Centralize as informações de cada empresa.",
     icone: Building2,
     grupo: 0,
-    fase: "2",
   },
   {
     tela: "contacts",
@@ -69,7 +68,6 @@ export const NAVEGACAO: ItemNavegacao[] = [
     descricao: "Pessoas, telefones e histórico de relacionamento.",
     icone: UsersRound,
     grupo: 0,
-    fase: "2",
   },
   {
     tela: "opportunities",
@@ -85,7 +83,6 @@ export const NAVEGACAO: ItemNavegacao[] = [
     descricao: "Organize tarefas, retornos e lembretes de pós-venda.",
     icone: CalendarDays,
     grupo: 0,
-    fase: "2 e 4",
   },
   {
     tela: "projects",

@@ -9,6 +9,7 @@ import {
   type SelectedLeadFilters,
 } from "../api";
 import { useAppStore } from "../store";
+import { ConverterLead } from "../features/crm/ConverterLead";
 
 const TEMPLATE_VARS = ["empresa", "segmento", "cidade", "estado", "prospectador"];
 
@@ -564,6 +565,7 @@ export function SelectedLeadsPage() {
                       </td>
                       <td className={cellClass}>
                         <div className="flex items-center gap-1">
+                          <ConverterLead leadId={lead.id} />
                           {lead.is_whatsapp && lead.whatsapp_link ? (
                             <a
                               href={lead.whatsapp_link}

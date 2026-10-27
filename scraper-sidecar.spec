@@ -26,7 +26,7 @@ a = Analysis(
     ["main.py"],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[("backend/migrations/*.sql", "backend/migrations")],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

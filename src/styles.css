@@ -924,3 +924,142 @@ p {
     transition: none !important;
   }
 }
+.crm-espaco {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.crm-resumo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.crm-resumo > div {
+  min-width: 0;
+}
+.crm-resumo p {
+  color: var(--text-secondary);
+}
+.crm-formulario h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.crm-formulario h3 {
+  margin: 18px 0 12px;
+}
+.crm-formulario p {
+  color: var(--text-secondary);
+}
+.crm-formulario form,
+form.crm-formulario {
+  display: grid;
+  gap: 16px;
+}
+.crm-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.crm-campos .campo,
+.crm-filtros .campo {
+  min-width: 0;
+  width: 100%;
+}
+.crm-campos input,
+.crm-campos select,
+.crm-campos textarea,
+.crm-filtros input,
+.crm-filtros select {
+  width: 100%;
+  min-height: 44px;
+}
+.crm-campos textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.crm-filtros {
+  display: flex;
+  gap: 20px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.crm-filtros .campo:first-child {
+  flex: 1 1 260px;
+}
+.crm-filtros .campo:last-child:not(:first-child) {
+  flex: 0 1 180px;
+}
+.crm-filtros .campo span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.crm-colunas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.crm-registros {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+}
+.crm-registros li {
+  display: grid;
+  gap: 5px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-wrap: anywhere;
+}
+.crm-registros span {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.crm-registros .botao {
+  justify-self: start;
+}
+.crm-tabela {
+  overflow: auto;
+  margin: 16px 0;
+}
+.crm-tabela table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 640px;
+  text-align: left;
+}
+.crm-tabela th {
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+.crm-tabela th,
+.crm-tabela td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.crm-tabela td {
+  height: var(--altura-linha);
+  overflow-wrap: anywhere;
+  max-width: 360px;
+}
+.crm-tabela small {
+  display: block;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.crm-vazio {
+  text-align: center;
+  padding: 32px 12px;
+}
+@media (max-width: 1050px) {
+  .crm-colunas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

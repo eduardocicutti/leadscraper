@@ -12,6 +12,7 @@ from sqlalchemy import event, or_, text
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from backend.core.logging import logger
+from backend.repositories.migracoes import aplicarMigracoes
 from backend.domain.models import AppSetting, Lead, SearchHistory, SelectedLead
 from backend.domain.whatsapp import (
     DEFAULT_MESSAGE_TEMPLATE,
@@ -33,6 +34,7 @@ def init_db(db_path: str) -> None:
         db_file_path = resolved_path
         resolved_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info("Opening database at %s", resolved_path)
+        aplicarMigracoes(resolved_path)
         engine = create_engine(
             f"sqlite:///{resolved_path}",
             connect_args={"check_same_thread": False},

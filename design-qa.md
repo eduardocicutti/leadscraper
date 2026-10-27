@@ -35,4 +35,12 @@ Navegação, busca de menu com Enter, tema claro/escuro, densidade persistente a
 
 Este relatório registra um primeiro incremento, não a aceitação da interface final das referências. Não bloquear testes e versionamento do incremento por chamar a interface final de concluída.
 
+## Incremento do CRM local — 26/10/2026
+
+Telas Empresas, Contatos e Atividades deixaram de ser placeholders. Aplicados tokens existentes, ícones Lucide SVG, tabela com busca e painéis de contatos/atividades/linha do tempo. O detalhe é uma extensão funcional: não há imagem de referência específica desse detalhe, portanto não foi atribuído resultado de correspondência exata.
+
+Capturas locais: `docs/qa/fase-2/crm-desktop.png` e `crm-mobile.png`. Inspeção em desktop 1536 × 1024 e larguras 768 e 360 px; no detalhe, larguras do documento 753/345 px respectivamente, sem transbordamento externo. Dados fictícios em banco de prévia isolado. Cadastro, pesquisa por telefone, edição de contato e lembrete reagendado foram exercitados. O reagendamento aparece pendente e mantém o evento com data anterior e nova.
+
+Permanecem as pendências de fidelidade do primeiro incremento. Este avanço funcional não aprova o visual completo das referências.
+
 final result: blocked

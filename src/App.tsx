@@ -21,6 +21,7 @@ import { ModuloPlanejado } from "./features/modulos/ModuloPlanejado";
 import { NAVEGACAO } from "./config/navegacao";
 import { Botao } from "./components/ui/Botao";
 import { Planilhas } from "./features/planilhas/Planilhas";
+import { Crm } from "./features/crm/Crm";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,12 @@ function ConteudoPagina() {
   if (NAVEGACAO.find((item) => item.tela === tela)?.fase)
     return <ModuloPlanejado />;
   switch (tela) {
+    case "companies":
+      return <Crm key="empresas" modo="empresas" />;
+    case "contacts":
+      return <Crm key="contatos" modo="contatos" />;
+    case "activities":
+      return <Crm key="atividades" modo="atividades" />;
     case "settings":
       return <Configuracoes />;
     case "about":

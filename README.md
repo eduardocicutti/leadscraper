@@ -202,6 +202,10 @@ lead_scraper/
 
 ## Problemas comuns
 
+### CRM local em desenvolvimento
+
+O primeiro incremento da fase 2 adiciona empresas, contatos, atividades e lembretes persistentes, com histórico e inclusão de leads no CRM. Configuração da prévia isolada, contratos, testes e limitações: [implementação da fase 2](docs/implementacao-fase-2.md). O backend deve ser atualizado junto da interface; o sidecar instalado anterior não possui essas rotas. Ainda não há autenticação nem sincronização remota.
+
 **Backend não responde**  
 Confirme que `python main.py` está rodando e que a porta 8000 está livre.
 

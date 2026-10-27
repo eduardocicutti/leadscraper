@@ -22,6 +22,7 @@ from backend.api.schemas import (
     SelectedLeadUpdate,
     SpreadsheetImportRequest,
 )
+from backend.api.crm_routes import configurarCrm
 from backend.core.logging import logger
 from backend.repositories import database
 from backend.services.export_service import generate_xlsx
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(lifespan=lifespan)
+    configurarCrm(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
