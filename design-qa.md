@@ -31,7 +31,7 @@ Implementação: navegador interno em http://127.0.0.1:1420. Captura Sobre: `doc
 
 ## Verificações funcionais
 
-Navegação, tema claro/escuro, densidade persistente após recarga, restauração da aparência, menu móvel e indicação de módulo futuro exercitados. Inspeção de erros de console e detalhes de formulário segue como verificação complementar antes da aprovação visual final. Build não substitui essa verificação.
+Navegação, busca de menu com Enter, tema claro/escuro, densidade persistente após recarga, restauração da aparência, menu móvel e indicação de módulo futuro exercitados. Seleção de Academias e preset 50 atualizaram os campos correspondentes sem iniciar coleta. Consulta aos logs do navegador não retornou erros nesse percurso. Largura do documento não excedeu o viewport em 360 e 768 px. Build não substitui aprovação visual final.
 
 Este relatório registra um primeiro incremento, não a aceitação da interface final das referências. Não bloquear testes e versionamento do incremento por chamar a interface final de concluída.
 

@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import { useEffect } from "react";
 import { api, type StatusResponse } from "./api";
 import { HistoryPanel } from "./components/HistoryPanel";
@@ -22,18 +26,32 @@ const queryClient = new QueryClient();
 
 function ConteudoPagina() {
   const tela = useAppStore((estado) => estado.activeView);
-  if (NAVEGACAO.find((item) => item.tela === tela)?.fase) return <ModuloPlanejado />;
+  if (NAVEGACAO.find((item) => item.tela === tela)?.fase)
+    return <ModuloPlanejado />;
   switch (tela) {
-    case "settings": return <Configuracoes />;
-    case "about": return <Sobre />;
-    case "agent": return <AgenteLocal />;
-    case "spreadsheets": return <Planilhas />;
-    case "selected": return <SelectedLeadsPage />;
-    case "history": return <PastProspectionsPage />;
-    default: return <div className="prospeccao-layout">
-      <SearchPanel />
-      <div className="resultados-prospeccao legado"><StatusBar /><StatsRow /><LeadsTable /></div>
-    </div>;
+    case "settings":
+      return <Configuracoes />;
+    case "about":
+      return <Sobre />;
+    case "agent":
+      return <AgenteLocal />;
+    case "spreadsheets":
+      return <Planilhas />;
+    case "selected":
+      return <SelectedLeadsPage />;
+    case "history":
+      return <PastProspectionsPage />;
+    default:
+      return (
+        <div className="prospeccao-layout">
+          <SearchPanel />
+          <div className="resultados-prospeccao legado">
+            <StatusBar />
+            <StatsRow />
+            <LeadsTable />
+          </div>
+        </div>
+      );
   }
 }
 
@@ -46,18 +64,30 @@ function Workspace() {
 
   const isPolling = status === "pending" || status === "running";
 
-  const { data: scrapeData, isError: erroExtracao, refetch: consultarExtracao } = useQuery({
+  const {
+    data: scrapeData,
+    isError: erroExtracao,
+    refetch: consultarExtracao,
+  } = useQuery({
     queryKey: ["status", jobId],
     queryFn: () =>
-      api.get<StatusResponse>(`/status/${jobId}`).then((response) => response.data),
+      api
+        .get<StatusResponse>(`/status/${jobId}`)
+        .then((response) => response.data),
     enabled: Boolean(jobId) && !jobId?.startsWith("history:") && isPolling,
     refetchInterval: 1500,
   });
 
-  const { data: refreshData, isError: erroReleitura, refetch: consultarReleitura } = useQuery({
+  const {
+    data: refreshData,
+    isError: erroReleitura,
+    refetch: consultarReleitura,
+  } = useQuery({
     queryKey: ["status", refreshJobId],
     queryFn: () =>
-      api.get<StatusResponse>(`/status/${refreshJobId}`).then((response) => response.data),
+      api
+        .get<StatusResponse>(`/status/${refreshJobId}`)
+        .then((response) => response.data),
     enabled: Boolean(refreshJobId) && isPolling,
     refetchInterval: 1500,
   });
@@ -76,11 +106,20 @@ function Workspace() {
 
   return (
     <Layout history={<HistoryPanel />}>
-      {(erroExtracao || erroReleitura) && isPolling && <div className="aviso" role="alert">
-        Não foi possível acompanhar a execução. Os resultados já salvos continuam no histórico.
-        <Botao onClick={() => void (refreshJobId ? consultarReleitura() : consultarExtracao())}>Consultar novamente</Botao>
-        <Botao onClick={() => navegar("history")}>Abrir histórico</Botao>
-      </div>}
+      {(erroExtracao || erroReleitura) && isPolling && (
+        <div className="aviso" role="alert">
+          Não foi possível acompanhar a execução. Os resultados já salvos
+          continuam no histórico.
+          <Botao
+            onClick={() =>
+              void (refreshJobId ? consultarReleitura() : consultarExtracao())
+            }
+          >
+            Consultar novamente
+          </Botao>
+          <Botao onClick={() => navegar("history")}>Abrir histórico</Botao>
+        </div>
+      )}
       <ConteudoPagina />
     </Layout>
   );
