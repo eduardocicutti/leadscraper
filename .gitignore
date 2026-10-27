@@ -40,5 +40,9 @@ Thumbs.db
 # Env secrets
 .env
 .env.*
+!.env.example
+.pytest_cache/
+docs/qa/
+docs/render-*/
 updater-private.key
 updater-private.key.pub

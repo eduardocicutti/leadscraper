@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import type { Lead, SearchRequest, StatusResponse } from "./api";
+import type { Tela } from "./config/navegacao";
 
 type Status = "idle" | "pending" | "running" | "done" | "error";
-type View = "search" | "selected" | "history";
+type View = Tela;
 
 interface AppStore {
   activeView: View;

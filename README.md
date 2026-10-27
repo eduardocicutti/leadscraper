@@ -1,5 +1,7 @@
 # Lead Scraper
 
+> A evolução para Plataforma Comercial começou. Consulte [o primeiro incremento](docs/implementacao-fase-1.md), [o plano](docs/requisitos-e-plano-implementacao-2026.md) e [a direção visual](docs/direcao-visual-interface.md). O backend e o banco continuam locais nesta etapa.
+
 Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecimentos por segmento e localização, qualifica com score comercial e exporta planilha Excel.
 
 ---
@@ -30,7 +32,7 @@ Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecime
 ### Dependências Python
 
 ```powershell
-pip install fastapi uvicorn playwright openpyxl sqlmodel pyinstaller
+python -m pip install -r requirements.txt -r requirements-dev.txt
 python -m playwright install chromium
 ```
 

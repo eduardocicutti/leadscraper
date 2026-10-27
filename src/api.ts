@@ -1,4 +1,5 @@
 import axios from "axios";
+import { API_URL } from "./config/produto";
 
 export interface Lead {
   id?: number | null;
@@ -121,4 +122,4 @@ export interface BackupRestoreResponse {
   previous_backup_path: string;
 }
 
-export const api = axios.create({ baseURL: "http://127.0.0.1:8000" });
+export const api = axios.create({ baseURL: API_URL });

@@ -1,412 +1,99 @@
-import type { ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
-import { useEffect, useRef, useState } from "react";
-import {
-  Archive,
-  DatabaseBackup,
-  DownloadCloud,
-  History,
-  Search,
-  Settings,
-  Star,
-  Upload,
-  X,
-} from "lucide-react";
-import { api, type BackupRestoreResponse, type DiagnosticsResponse } from "../api";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { History, Menu, Monitor, Search, X, Layers, ChevronRight } from "lucide-react";
+import { NAVEGACAO, type Tela } from "../config/navegacao";
+import { PRODUTO } from "../config/produto";
 import { useAppStore } from "../store";
-import { getInitials } from "../utils/initials";
+import { usePreferencias } from "../services/preferencias";
+import { useConexaoLocal } from "../services/conexao";
 import { APP_TITLE, APP_VERSION } from "../version";
+import { getInitials } from "../utils/initials";
+import { Botao } from "./ui/Botao";
 
-interface LayoutProps {
-  children: ReactNode;
-  history: ReactNode;
-}
-
-export function Layout({ children, history }: LayoutProps) {
-  const queryClient = useQueryClient();
-  const activeView = useAppStore((state) => state.activeView);
-  const setActiveView = useAppStore((state) => state.setActiveView);
-  const historyOpen = useAppStore((state) => state.historyOpen);
-  const setHistoryOpen = useAppStore((state) => state.setHistoryOpen);
-  const prospectador = useAppStore((state) => state.prospectador);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [backupMessage, setBackupMessage] = useState("");
-  const [updateMessage, setUpdateMessage] = useState("");
-  const [updateProgress, setUpdateProgress] = useState("");
-  const restoreInputRef = useRef<HTMLInputElement | null>(null);
-  const avatarInitials = getInitials(prospectador);
-
-  const diagnosticsQuery = useQuery({
-    queryKey: ["diagnostics"],
-    queryFn: () => api.get<DiagnosticsResponse>("/diagnostics").then((r) => r.data),
-    enabled: settingsOpen,
-  });
-
-  const navItem =
-    "w-8 h-8 rounded-md flex items-center justify-center transition-colors duration-100";
-
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = String(reader.result || "");
-        resolve(result.includes(",") ? result.split(",")[1] : result);
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-  }
-
-  const backupMutation = useMutation({
-    mutationFn: () => api.get("/backup", { responseType: "blob" }),
-    onSuccess: (response) => {
-      const disposition = response.headers["content-disposition"] || "";
-      const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
-      const filename = filenameMatch?.[1] || `lead-scraper-backup-${APP_VERSION}.db`;
-      const url = URL.createObjectURL(response.data);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      setBackupMessage("Backup baixado com sucesso.");
-      diagnosticsQuery.refetch();
-    },
-    onError: () => setBackupMessage("Falha ao baixar backup."),
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: async (file: File) => {
-      const content_base64 = await fileToBase64(file);
-      return api
-        .post<BackupRestoreResponse>("/restore", {
-          filename: file.name,
-          content_base64,
-        })
-        .then((r) => r.data);
-    },
-    onSuccess: () => {
-      setBackupMessage("Backup restaurado. Dados recarregados.");
-      queryClient.invalidateQueries();
-      diagnosticsQuery.refetch();
-    },
-    onError: () => setBackupMessage("Falha ao restaurar backup."),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async () => {
-      const isTauri = Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
-      if (!isTauri) {
-        return "Atualização automática disponível apenas no aplicativo instalado.";
-      }
-
-      setUpdateProgress("Verificando...");
-      const update = await check();
-      if (!update) {
-        return "Você já está na versão mais recente.";
-      }
-
-      setUpdateProgress(`Baixando versão ${update.version}...`);
-      let downloaded = 0;
-      let total = 0;
-      await update.downloadAndInstall((event) => {
-        if (event.event === "Started") {
-          total = event.data.contentLength || 0;
-          setUpdateProgress(total ? `Baixando 0 de ${Math.round(total / 1024 / 1024)} MB` : "Baixando...");
-        }
-        if (event.event === "Progress") {
-          downloaded += event.data.chunkLength;
-          if (total > 0) {
-            setUpdateProgress(
-              `Baixando ${Math.round(downloaded / 1024 / 1024)} de ${Math.round(total / 1024 / 1024)} MB`,
-            );
-          }
-        }
-        if (event.event === "Finished") {
-          setUpdateProgress("Instalando atualização...");
-        }
-      });
-
-      await relaunch();
-      return "Atualização instalada.";
-    },
-    onSuccess: (message) => {
-      setUpdateMessage(message);
-      setUpdateProgress("");
-    },
-    onError: () => {
-      setUpdateMessage("Não foi possível verificar atualizações agora.");
-      setUpdateProgress("");
-    },
-  });
-
-  function handleRestoreFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    const confirmed = window.confirm(
-      "Restaurar este backup vai substituir os dados atuais. Um backup de segurança será criado antes da troca. Continuar?",
-    );
-    if (confirmed) {
-      setBackupMessage("");
-      restoreMutation.mutate(file);
-    }
-  }
-
-  const headerTitle =
-    activeView === "selected"
-      ? "LISTA PREFERENCIAL"
-      : activeView === "history"
-        ? "PROSPECÇÕES PASSADAS"
-        : "PROSPECÇÃO";
+export function Layout({ children, history }: { children: ReactNode; history: ReactNode }) {
+  const tela = useAppStore((estado) => estado.activeView);
+  const navegar = useAppStore((estado) => estado.setActiveView);
+  const historicoAberto = useAppStore((estado) => estado.historyOpen);
+  const alterarHistorico = useAppStore((estado) => estado.setHistoryOpen);
+  const prospectador = useAppStore((estado) => estado.prospectador);
+  const status = useAppStore((estado) => estado.status);
+  const preferencias = usePreferencias();
+  const conexao = useConexaoLocal();
+  const [menuAberto, alterarMenu] = useState(false);
+  const [busca, alterarBusca] = useState("");
+  const campoBusca = useRef<HTMLInputElement>(null);
+  const estaOnline = !conexao.isError && conexao.data?.ok && conexao.data.db_ready;
+  const pagina = NAVEGACAO.find((item) => item.tela === tela);
+  const titulo = tela === "agent" ? "Agente local" : pagina?.titulo;
+  const descricao = tela === "agent" ? "Conexão e acompanhamento da execução local." : pagina?.descricao;
+  const itensEncontrados = busca.trim() ? NAVEGACAO.filter((item) => item.titulo.toLocaleLowerCase("pt-BR").includes(busca.trim().toLocaleLowerCase("pt-BR"))) : [];
 
   useEffect(() => {
     document.title = APP_TITLE;
+    document.documentElement.dataset.tema = preferencias.tema;
+    document.documentElement.dataset.densidade = preferencias.densidade;
+    document.documentElement.style.fontSize = `${16 * preferencias.escalaFonte / 100}px`;
+  }, [preferencias.tema, preferencias.densidade, preferencias.escalaFonte]);
+
+  useEffect(() => {
+    const focarBusca = (evento: KeyboardEvent) => {
+      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "k") {
+        evento.preventDefault(); campoBusca.current?.focus();
+      }
+      if (evento.key === "Escape") { alterarMenu(false); alterarBusca(""); }
+    };
+    document.addEventListener("keydown", focarBusca);
+    return () => document.removeEventListener("keydown", focarBusca);
   }, []);
 
-  return (
-    <div className="min-h-screen w-full bg-[#0c1118] text-[#e8edf5] font-sans">
-      <div
-        className="fixed inset-0 z-0 pointer-events-none"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle 800px at 50% 50%, rgba(37,99,235,0.06), transparent)",
-        }}
-      />
+  function abrirTela(destino: Tela) {
+    navegar(destino); alterarMenu(false); alterarBusca("");
+    document.getElementById("conteudo-principal")?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0 });
+  }
 
-      <div className="relative z-10 flex h-screen w-full">
-        <aside className="w-16 h-full bg-[#0c1118] border-r border-[#1e2d45] flex flex-col items-center py-6 justify-between">
-          <div className="flex flex-col items-center gap-6">
-            <div
-              title={prospectador}
-              aria-label={`Prospectador: ${prospectador}`}
-              className="w-8 h-8 bg-[#0f1623] border border-[#1e2d45] rounded-md flex items-center justify-center font-['Geist_Mono'] text-xs font-bold text-[#2563eb] tracking-widest"
-            >
-              {avatarInitials}
-            </div>
-
-            <nav className="flex flex-col gap-2">
-              <button
-                type="button"
-                aria-label="Busca"
-                onClick={() => setActiveView("search")}
-                className={`${navItem} ${
-                  activeView === "search" && !historyOpen
-                    ? "bg-[#1d3a6e] text-[#60a5fa]"
-                    : "text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]"
-                }`}
-              >
-                <Search className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Lista Preferencial"
-                onClick={() => setActiveView("selected")}
-                className={`${navItem} ${
-                  activeView === "selected"
-                    ? "bg-[#1d3a6e] text-[#60a5fa]"
-                    : "text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]"
-                }`}
-              >
-                <Star className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Prospecções passadas"
-                onClick={() => setActiveView("history")}
-                className={`${navItem} ${
-                  activeView === "history"
-                    ? "bg-[#1d3a6e] text-[#60a5fa]"
-                    : "text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]"
-                }`}
-              >
-                <Archive className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                aria-label="Histórico rápido"
-                onClick={() => setHistoryOpen(!historyOpen)}
-                className={`${navItem} ${
-                  historyOpen
-                    ? "bg-[#1d3a6e] text-[#60a5fa]"
-                    : "text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]"
-                }`}
-              >
-                <History className="w-4 h-4" />
-              </button>
-            </nav>
-          </div>
-
-          <button
-            type="button"
-            aria-label="Configurações"
-            onClick={() => setSettingsOpen(true)}
-            className={`${navItem} text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0f1623]`}
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-        </aside>
-
-        <main className="flex-1 h-full flex flex-col bg-transparent min-w-0">
-          <header className="h-12 bg-[#0c1118] border-b border-[#1e2d45] px-6 flex items-center justify-between">
-            <div className="text-[13px] font-['Geist_Mono'] font-semibold text-[#8896ac] uppercase tracking-[0.12em]">
-              {headerTitle}
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] text-[#4a5568] font-['JetBrains_Mono']">
-                  operacional
-                </span>
-              </div>
-            </div>
-          </header>
-
-          <div className="flex-1 flex min-h-0">
-            <div className="flex-1 flex flex-col min-w-0">{children}</div>
-            {historyOpen && activeView === "search" ? history : null}
-          </div>
-        </main>
+  return <div className="aplicacao">
+    <a className="pular-conteudo" href="#conteudo-principal">Pular para o conteúdo</a>
+    {menuAberto && <button className="fundo-menu" aria-label="Fechar menu" onClick={() => alterarMenu(false)} />}
+    <aside className={`sidebar ${menuAberto ? "sidebar--aberta" : ""}`} aria-label="Navegação principal">
+      <div className="marca"><Layers size={33} aria-hidden="true" /><div><strong>{PRODUTO.organizacao}</strong><span>{PRODUTO.nome}</span></div>
+        <button className="botao-icone fechar-menu" aria-label="Fechar menu" onClick={() => alterarMenu(false)}><X size={20} /></button>
       </div>
-
-      {settingsOpen ? (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0c1118]/80">
-          <section className="w-[520px] max-h-[90vh] overflow-auto rounded-lg border border-[#1e2d45] bg-[#0f1623]">
-            <div className="h-10 px-4 border-b border-[#162035] flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-[#4a5568] uppercase tracking-[0.1em]">
-                Sobre
-              </span>
-              <button
-                type="button"
-                aria-label="Fechar configurações"
-                onClick={() => setSettingsOpen(false)}
-                className="w-8 h-8 rounded-md flex items-center justify-center text-[#4a5568] hover:text-[#8896ac] hover:bg-[#0c1118] transition-colors duration-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <div className="text-base font-['Geist_Mono'] font-semibold text-[#e8edf5] uppercase tracking-[0.08em]">
-                  Lead Scraper
-                </div>
-                <div className="mt-1 text-[12px] text-[#8896ac] font-['JetBrains_Mono']">
-                  Versão {APP_VERSION}
-                </div>
-                <div className="mt-0.5 text-[12px] text-[#4a5568] font-['JetBrains_Mono']">
-                  Desenvolvido por Eduardo
-                </div>
-              </div>
-
-              <p className="text-[13px] leading-6 text-[#8896ac]">
-                O objetivo do aplicativo é automatizar a prospecção de leads no
-                Google Maps, qualificar empresas com score comercial e exportar
-                uma planilha pronta para prospecção comercial.
-              </p>
-
-              <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3">
-                <div className="text-[10px] text-[#4a5568] uppercase tracking-[0.08em]">
-                  Backend local
-                </div>
-                <div className="mt-1 text-[12px] text-[#8896ac] font-['JetBrains_Mono']">
-                  FastAPI em http://localhost:8000
-                </div>
-              </div>
-
-              <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3 space-y-2">
-                <div className="text-[10px] text-[#4a5568] uppercase tracking-[0.08em]">
-                  Diagnóstico
-                </div>
-                {diagnosticsQuery.isLoading ? (
-                  <div className="text-[12px] text-[#4a5568] font-['JetBrains_Mono']">
-                    carregando...
-                  </div>
-                ) : diagnosticsQuery.data ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-2 text-[12px] font-['JetBrains_Mono'] text-[#8896ac]">
-                      <span>Histórico: {diagnosticsQuery.data.counts.history}</span>
-                      <span>Leads: {diagnosticsQuery.data.counts.leads}</span>
-                      <span>Preferenciais: {diagnosticsQuery.data.counts.selected_leads}</span>
-                      <span>Integridade: {diagnosticsQuery.data.integrity_check}</span>
-                    </div>
-                    <div className="break-all text-[11px] text-[#4a5568] font-['JetBrains_Mono']">
-                      {diagnosticsQuery.data.db_path}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-[12px] text-[#fca5a5] font-['JetBrains_Mono']">
-                    diagnóstico indisponível
-                  </div>
-                )}
-              </div>
-
-              <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3 space-y-3">
-                <div className="text-[10px] text-[#4a5568] uppercase tracking-[0.08em]">
-                  Backup
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={backupMutation.isPending}
-                    onClick={() => backupMutation.mutate()}
-                    className="h-8 px-3 rounded-md border border-[#1e2d45] bg-[#0f1623] text-[12px] text-[#e8edf5] hover:bg-[#162035] disabled:text-[#4a5568] inline-flex items-center gap-1.5"
-                  >
-                    <DatabaseBackup className="w-3.5 h-3.5" />
-                    {backupMutation.isPending ? "Gerando" : "Baixar backup"}
-                  </button>
-                  <input
-                    ref={restoreInputRef}
-                    type="file"
-                    accept=".db,.sqlite,.sqlite3"
-                    onChange={handleRestoreFile}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    disabled={restoreMutation.isPending}
-                    onClick={() => restoreInputRef.current?.click()}
-                    className="h-8 px-3 rounded-md border border-[#1e2d45] bg-[#0f1623] text-[12px] text-[#e8edf5] hover:bg-[#162035] disabled:text-[#4a5568] inline-flex items-center gap-1.5"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    {restoreMutation.isPending ? "Restaurando" : "Restaurar backup"}
-                  </button>
-                </div>
-                {backupMessage ? (
-                  <div className="text-[11px] text-[#60a5fa] font-['JetBrains_Mono']">
-                    {backupMessage}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="border border-[#1e2d45] rounded-md bg-[#0c1118] px-4 py-3 space-y-3">
-                <div className="text-[10px] text-[#4a5568] uppercase tracking-[0.08em]">
-                  Atualizações
-                </div>
-                <button
-                  type="button"
-                  disabled={updateMutation.isPending}
-                  onClick={() => {
-                    setUpdateMessage("");
-                    updateMutation.mutate();
-                  }}
-                  className="h-8 px-3 rounded-md border border-[#1e2d45] bg-[#0f1623] text-[12px] text-[#e8edf5] hover:bg-[#162035] disabled:text-[#4a5568] inline-flex items-center gap-1.5"
-                >
-                  <DownloadCloud className="w-3.5 h-3.5" />
-                  {updateMutation.isPending ? "Verificando" : "Verificar atualização"}
-                </button>
-                {updateProgress || updateMessage ? (
-                  <div className="text-[11px] text-[#60a5fa] font-['JetBrains_Mono']">
-                    {updateProgress || updateMessage}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </section>
+      <nav className="menu-principal">
+        {[0, 1, 2].map((grupo) => <div className="grupo-menu" key={grupo}>
+          {NAVEGACAO.filter((item) => item.grupo === grupo).map(({ tela: destino, titulo: rotulo, icone: Icone, fase }) =>
+            <button key={destino} className={`item-menu ${tela === destino ? "item-menu--ativo" : ""}`}
+              aria-current={tela === destino ? "page" : undefined} onClick={() => abrirTela(destino)} title={fase ? `${rotulo} · fase ${fase}` : rotulo}>
+              <Icone size={19} aria-hidden="true" /><span>{rotulo}</span>
+            </button>)}
+        </div>)}
+      </nav>
+      <section className="cartao-agente" aria-label="Estado do backend local">
+        <div className="linha-agente"><span className={`ponto-status ${estaOnline ? "ponto-status--online" : ""}`} /><div><strong>Agente local</strong><span>{conexao.isPending ? "Verificando…" : estaOnline ? "Backend conectado" : "Sem conexão"}</span></div><small>v{APP_VERSION}</small></div>
+        <div className="estado-agente"><Monitor size={16} aria-hidden="true" />{status === "running" || status === "pending" ? "Extração em andamento" : "Execução neste computador"}</div>
+        <Botao icone={Monitor} onClick={() => abrirTela("agent")}>Ver agente</Botao>
+      </section>
+    </aside>
+    <div className="area-aplicacao">
+      <header className="cabecalho">
+        <button className="botao-icone abrir-menu" aria-label="Abrir menu" aria-expanded={menuAberto} onClick={() => alterarMenu(true)}><Menu size={22} /></button>
+        <div className="busca-cabecalho"><Search size={18} aria-hidden="true" />
+          <input ref={campoBusca} aria-label="Buscar menu" placeholder="Buscar um menu…" value={busca} onChange={(evento) => alterarBusca(evento.target.value)}
+            onKeyDown={(evento) => { if (evento.key === "Enter" && itensEncontrados[0]) abrirTela(itensEncontrados[0].tela); }} />
+          <kbd>Ctrl K</kbd>
+          {busca.trim() && <div className="resultados-menu" aria-label="Menus encontrados">
+            {itensEncontrados.length ? itensEncontrados.map((item) => <button key={item.tela} onClick={() => abrirTela(item.tela)}><item.icone size={18} />{item.titulo}<ChevronRight size={16} /></button>) : <p>Nenhum menu encontrado.</p>}
+          </div>}
         </div>
-      ) : null}
+        <div className="perfil-local"><span className="avatar">{getInitials(prospectador)}</span><div><strong>{prospectador}</strong><small>Operador local</small></div></div>
+      </header>
+      <main id="conteudo-principal" tabIndex={-1} className="conteudo">
+        <div className="titulo-pagina"><div><h1>{titulo}</h1><p>{descricao}</p></div>
+          {tela === "search" && <Botao icone={History} aria-expanded={historicoAberto} onClick={() => alterarHistorico(!historicoAberto)}>Histórico rápido</Botao>}
+        </div>
+        <div className="area-conteudo"><div className="pagina">{children}</div>
+          {historicoAberto && tela === "search" && <div className="historico-rapido"><Botao icone={X} onClick={() => alterarHistorico(false)}>Fechar histórico</Botao>{history}</div>}
+        </div>
+      </main>
     </div>
-  );
+  </div>;
 }

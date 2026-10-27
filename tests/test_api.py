@@ -1,5 +1,6 @@
 import base64
 import os
+import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, unquote, urlparse
@@ -39,6 +40,18 @@ def test_diagnostics_reports_database_counts():
             assert data["integrity_check"] == "ok"
             assert data["counts"]["selected_leads"] == 0
             assert data["db_path"].endswith("test.db")
+
+
+@pytest.mark.parametrize("quantidade", [0, -1, 501, 1.5])
+def test_rejeita_quantidade_invalida_sem_iniciar_extracao(quantidade):
+    with TemporaryDirectory() as pasta:
+        with make_client(pasta) as cliente:
+            resposta = cliente.post("/scrape", json={
+                "segmento": "clinicas", "cidade": "Sao Mateus", "estado": "ES",
+                "max_results": quantidade, "prospectador": "Teste",
+            })
+            assert resposta.status_code == 422
+            assert cliente.get("/history").json() == []
 
 
 def test_spreadsheet_import_deduplicates_by_phone():

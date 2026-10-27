@@ -1,11 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ScrapeRequest(BaseModel):
     segmento: str
     cidade: str
     estado: str
-    max_results: int = 30
+    max_results: int = Field(default=30, ge=1, le=500, strict=True)
     prospectador: str = ""
 
 

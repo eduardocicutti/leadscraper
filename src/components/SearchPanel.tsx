@@ -1,168 +1,65 @@
-import { FormEvent, useState } from "react";
-import { Loader2, Play } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Building2, MapPin, Layers, Play, UserRound, Database, Search } from "lucide-react";
 import { api } from "../api";
 import { useAppStore } from "../store";
+import { Botao } from "./ui/Botao";
 
-const prospectadores = ["Eduardo", "Murilo", "Sofia", "Ydian", "Gabriel"];
-const estados = [
-  "AC",
-  "AL",
-  "AP",
-  "AM",
-  "BA",
-  "CE",
-  "DF",
-  "ES",
-  "GO",
-  "MA",
-  "MT",
-  "MS",
-  "MG",
-  "PA",
-  "PB",
-  "PR",
-  "PE",
-  "PI",
-  "RJ",
-  "RN",
-  "RS",
-  "RO",
-  "RR",
-  "SC",
-  "SP",
-  "SE",
-  "TO",
-];
+const PROSPECTADORES = ["Eduardo", "Murilo", "Sofia", "Ydian", "Gabriel"];
+const ESTADOS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+const SEGMENTOS = ["Restaurantes", "Academias", "Salões de beleza", "Clínicas odontológicas", "Pet shops", "Supermercados"];
 
 export function SearchPanel() {
-  const status = useAppStore((state) => state.status);
-  const setJob = useAppStore((state) => state.setJob);
-  const updateStatus = useAppStore((state) => state.updateStatus);
-  const prospectador = useAppStore((state) => state.prospectador);
-  const setProspectador = useAppStore((state) => state.setProspectador);
-  const [segmento, setSegmento] = useState("");
-  const [cidade, setCidade] = useState("");
-  const [estado, setEstado] = useState("ES");
-  const [maxResults, setMaxResults] = useState(30);
+  const status = useAppStore((estado) => estado.status);
+  const iniciarJob = useAppStore((estado) => estado.setJob);
+  const prospectador = useAppStore((estado) => estado.prospectador);
+  const alterarProspectador = useAppStore((estado) => estado.setProspectador);
+  const [segmento, alterarSegmento] = useState("");
+  const [cidade, alterarCidade] = useState("");
+  const [uf, alterarUf] = useState("ES");
+  const [quantidade, alterarQuantidade] = useState("30");
+  const [estaEnviando, alterarEnvio] = useState(false);
+  const [erro, alterarErro] = useState("");
+  const estaExecutando = estaEnviando || status === "running" || status === "pending";
 
-  const running = status === "running" || status === "pending";
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const params = {
-      segmento: segmento.trim(),
-      cidade: cidade.trim(),
-      estado,
-      prospectador,
-    };
-
-    try {
-      const response = await api.post<{ job_id: string }>("/scrape", {
-        ...params,
-        max_results: maxResults,
-      });
-      setJob(response.data.job_id, params, maxResults);
-    } catch {
-      updateStatus({
-        status: "error",
-        progress: 0,
-        total: 0,
-        log: "Falha na extração. Feche e abra o aplicativo novamente.",
-        leads_count: 0,
-        leads: [],
-      });
+  async function iniciarExtracao(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault(); alterarErro("");
+    const total = Number(quantidade);
+    if (!segmento.trim() || !cidade.trim() || !Number.isInteger(total) || total < 1 || total > 500) {
+      alterarErro("Informe segmento, cidade e uma quantidade inteira de 1 a 500."); return;
     }
+    const parametros = { segmento: segmento.trim(), cidade: cidade.trim(), estado: uf, prospectador };
+    alterarEnvio(true);
+    try {
+      const resposta = await api.post<{ job_id: string }>("/scrape", { ...parametros, max_results: total });
+      iniciarJob(resposta.data.job_id, parametros, total);
+    } catch {
+      alterarErro("Não foi possível iniciar. Verifique a conexão do backend na página Sobre e tente novamente. Seus campos foram mantidos.");
+    } finally { alterarEnvio(false); }
   }
 
-  const labelClass =
-    "text-[10px] font-semibold text-[#4a5568] uppercase tracking-[0.08em]";
-  const inputClass =
-    "h-8 bg-[#0b1220] border border-[#1e2d45] rounded-md px-3 text-[13px] text-[#e8edf5] font-['JetBrains_Mono'] placeholder:text-[#4a5568] focus:border-[#2563eb] focus:ring-0 outline-none transition-colors duration-100";
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className="h-auto bg-[#0f1623] border-b border-[#1e2d45] px-6 py-3 flex items-end gap-3"
-    >
-      <label className="flex flex-col gap-1 w-36">
-        <span className={labelClass}>Prospectador</span>
-        <select
-          value={prospectador}
-          onChange={(event) => setProspectador(event.target.value)}
-          className={inputClass}
-        >
-          {prospectadores.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 flex-1 min-w-48">
-        <span className={labelClass}>Segmento</span>
-        <input
-          value={segmento}
-          onChange={(event) => setSegmento(event.target.value)}
-          placeholder="clínicas odontológicas, academias..."
-          required
-          className={inputClass}
-        />
-      </label>
-
-      <label className="flex flex-col gap-1 w-44">
-        <span className={labelClass}>Cidade</span>
-        <input
-          value={cidade}
-          onChange={(event) => setCidade(event.target.value)}
-          placeholder="São Mateus"
-          required
-          className={inputClass}
-        />
-      </label>
-
-      <label className="flex flex-col gap-1 w-20">
-        <span className={labelClass}>Estado</span>
-        <select
-          value={estado}
-          onChange={(event) => setEstado(event.target.value)}
-          required
-          className={inputClass}
-        >
-          {estados.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1 w-28">
-        <span className={labelClass}>Quantidade</span>
-        <input
-          type="number"
-          min={1}
-          max={500}
-          value={maxResults}
-          onChange={(event) => setMaxResults(Number(event.target.value || 1))}
-          required
-          className={inputClass}
-        />
-      </label>
-
-      <button
-        type="submit"
-        disabled={running}
-        className="h-8 px-4 bg-[#2563eb] hover:bg-[#1d4ed8] disabled:bg-[#1d3a6e] disabled:text-[#8896ac] rounded-md text-[13px] font-semibold text-white flex items-center gap-2 transition-colors duration-100"
-      >
-        {running ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
-          <Play className="w-3.5 h-3.5 fill-current" />
-        )}
-        {running ? "Extraindo..." : "Iniciar extração"}
-      </button>
-    </form>
-  );
+  return <form className="painel formulario-prospeccao" onSubmit={iniciarExtracao}>
+    <div className="fonte-atual"><Search size={18} /><strong>Google Maps</strong><span className="selo">Fonte atual</span></div>
+    <fieldset disabled={estaExecutando}>
+      <legend><MapPin size={19} />Localização</legend>
+      <div className="campos-localizacao"><label className="campo">Estado<select value={uf} onChange={(evento) => alterarUf(evento.target.value)}>{ESTADOS.map((estado) => <option key={estado}>{estado}</option>)}</select></label>
+        <label className="campo">Cidade<input value={cidade} required placeholder="Ex.: São Mateus" onChange={(evento) => alterarCidade(evento.target.value)} /></label></div>
+      <p className="ajuda-campo">O mapa interativo e o catálogo de municípios entram na fase 3.</p>
+    </fieldset>
+    <fieldset disabled={estaExecutando}><legend><Building2 size={19} />Segmento</legend>
+      <label className="campo"><span className="sr-only">Segmento da busca</span><input required value={segmento} onChange={(evento) => alterarSegmento(evento.target.value)} placeholder="Buscar segmento…" /></label>
+      <div className="chips" aria-label="Sugestões de segmentos">{SEGMENTOS.map((sugestao) => <button type="button" key={sugestao} aria-pressed={segmento === sugestao} onClick={() => alterarSegmento(sugestao)}>{sugestao}</button>)}</div>
+    </fieldset>
+    <fieldset disabled={estaExecutando}><legend><Layers size={19} />Quantidade</legend>
+      <div className="presets" aria-label="Quantidade de leads">{[10, 30, 50, 100, 200].map((total) => <button type="button" key={total} aria-pressed={Number(quantidade) === total} onClick={() => alterarQuantidade(String(total))}>{total}</button>)}</div>
+      <label className="campo">Quantidade personalizada<input type="number" min="1" max="500" step="1" required value={quantidade} onChange={(evento) => alterarQuantidade(evento.target.value)} /></label>
+      <p className="ajuda-campo">Até 500 leads por busca. O total encontrado depende da região e do segmento.</p>
+    </fieldset>
+    <fieldset disabled={estaExecutando}><legend><UserRound size={19} />Responsável</legend>
+      <label className="campo"><span className="sr-only">Prospectador</span><select value={prospectador} onChange={(evento) => alterarProspectador(evento.target.value)}>{PROSPECTADORES.map((nome) => <option key={nome}>{nome}</option>)}</select></label>
+      <p className="ajuda-campo">Atribuição local. Contas e autenticação entram na fase 6.</p>
+    </fieldset>
+    <div className="resumo-fonte"><Database size={18} /><span>Extração e armazenamento neste computador</span></div>
+    {erro && <p className="erro-formulario" role="alert">{erro}</p>}
+    <Botao type="submit" variante="primario" icone={Play} carregando={estaExecutando} className="iniciar-extracao">{estaExecutando ? "Extração em andamento…" : "Iniciar extração"}</Botao>
+  </form>;
 }

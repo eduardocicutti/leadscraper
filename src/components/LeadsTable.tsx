@@ -7,20 +7,20 @@ import { leadKey, useAppStore } from "../store";
 function tempBadge(classificacao: string) {
   if (classificacao.includes("Quente")) {
     return {
-      label: "HOT",
+      label: "Quente",
       className:
         "bg-[rgba(239,68,68,0.08)] text-[#fca5a5] border-[rgba(239,68,68,0.2)]",
     };
   }
   if (classificacao.includes("Morno")) {
     return {
-      label: "WARM",
+      label: "Morno",
       className:
         "bg-[rgba(234,179,8,0.08)] text-[#fcd34d] border-[rgba(234,179,8,0.2)]",
     };
   }
   return {
-    label: "COLD",
+    label: "Frio",
     className:
       "bg-[rgba(59,130,246,0.08)] text-[#93c5fd] border-[rgba(59,130,246,0.2)]",
   };
@@ -140,8 +140,10 @@ export function LeadsTable() {
       </div>
 
       {leads.length === 0 ? (
-        <div className="flex-1 p-4 text-[12px] font-['JetBrains_Mono'] text-[#1e2d45]">
-          // nenhuma extração iniciada
+        <div className="estado-vazio">
+          <MapPin size={38} aria-hidden="true" />
+          <h2>Sua próxima oportunidade começa aqui</h2>
+          <p>Escolha uma cidade e um segmento para encontrar empresas. Os resultados aparecerão aqui durante a extração.</p>
         </div>
       ) : (
         <div className="flex-1 overflow-auto">

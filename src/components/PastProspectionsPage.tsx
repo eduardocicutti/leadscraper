@@ -34,7 +34,7 @@ export function PastProspectionsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["history"],
     queryFn: () => api.get<HistoryRecord[]>("/history").then((r) => r.data),
     refetchInterval: 5000,
@@ -118,6 +118,7 @@ export function PastProspectionsPage() {
 
   return (
     <div className="flex-1 min-h-0 p-6 flex flex-col gap-4 overflow-hidden">
+      {isError && <div className="aviso" role="alert">Não foi possível carregar o histórico. Verifique o backend. <button type="button" className="botao" onClick={() => void refetch()}>Tentar novamente</button></div>}
       <section className="border border-[#1e2d45] rounded-md bg-[#0f1623] px-4 py-3 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 w-40">
           <span className={labelClass}>Segmento</span>

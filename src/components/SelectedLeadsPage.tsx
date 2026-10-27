@@ -15,20 +15,20 @@ const TEMPLATE_VARS = ["empresa", "segmento", "cidade", "estado", "prospectador"
 function tempBadge(classificacao: string) {
   if (classificacao.includes("Quente")) {
     return {
-      label: "HOT",
+      label: "Quente",
       className:
         "bg-[rgba(239,68,68,0.08)] text-[#fca5a5] border-[rgba(239,68,68,0.2)]",
     };
   }
   if (classificacao.includes("Morno")) {
     return {
-      label: "WARM",
+      label: "Morno",
       className:
         "bg-[rgba(234,179,8,0.08)] text-[#fcd34d] border-[rgba(234,179,8,0.2)]",
     };
   }
   return {
-    label: "COLD",
+    label: "Frio",
     className:
       "bg-[rgba(59,130,246,0.08)] text-[#93c5fd] border-[rgba(59,130,246,0.2)]",
   };
@@ -78,7 +78,7 @@ export function SelectedLeadsPage() {
   const [editingMessages, setEditingMessages] = useState<Record<number, string>>({});
   const [importSummary, setImportSummary] = useState("");
 
-  const { data: leads = [], isLoading } = useQuery({
+  const { data: leads = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["selected-leads"],
     queryFn: () => api.get<SelectedLead[]>("/selected-leads").then((r) => r.data),
   });
@@ -285,6 +285,7 @@ export function SelectedLeadsPage() {
 
   return (
     <div className="flex-1 min-h-0 p-6 flex flex-col gap-4 overflow-hidden">
+      {isError && <div className="aviso" role="alert">Não foi possível carregar seus leads. Verifique o backend. <button type="button" className="botao" onClick={() => void refetch()}>Tentar novamente</button></div>}
       <section className="border border-[#1e2d45] rounded-md bg-[#0f1623] p-4 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold text-[#4a5568] uppercase tracking-[0.1em]">
