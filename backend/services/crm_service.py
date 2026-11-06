@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import Connection
@@ -11,6 +11,7 @@ from backend.api.crm_schemas import (
     ContatoEntrada,
     EmpresaEdicao,
     EmpresaEntrada,
+    QualificacaoEntrada,
 )
 from backend.domain.crm import (
     ContextoLocal,
@@ -214,6 +215,12 @@ def detalheEmpresa(empresaId: str, contexto: ContextoLocal) -> dict:
     with repositorio.transacao() as conexao:
         empresa = repositorio.buscarEmpresa(conexao, empresaId, contexto)
         parametros = {"id": empresaId, "org": contexto.organizationId}
+        qualificacoes = repositorio.consultar(
+            conexao,
+            "SELECT * FROM crm_lead WHERE empresaId=:id AND organizationId=:org",
+            parametros,
+        )
+        empresa["qualificacao"] = qualificacoes[0] if qualificacoes else None
         for chave, tabela in (
             ("contatos", "crm_contato"),
             ("atividades", "crm_atividade"),
@@ -225,6 +232,59 @@ def detalheEmpresa(empresaId: str, contexto: ContextoLocal) -> dict:
                 parametros,
             )
         return empresa
+
+
+def qualificarEmpresa(
+    empresaId: str, entrada: QualificacaoEntrada, contexto: ContextoLocal
+) -> dict:
+    with repositorio.transacao() as conexao:
+        repositorio.buscarEmpresa(conexao, empresaId, contexto)
+        parametros = {"id": empresaId, "org": contexto.organizationId}
+        registros = repositorio.consultar(
+            conexao,
+            "SELECT * FROM crm_lead WHERE empresaId=:id AND organizationId=:org",
+            parametros,
+        )
+        if not registros:
+            raise ErroCrm("Qualificação não encontrada.", "NAO_ENCONTRADO", 404)
+        anterior = registros[0]
+        if anterior["version"] != entrada.version:
+            raise ErroCrm(
+                "A qualificação mudou. Recarregue o cadastro antes de editar.",
+                "VERSAO_CONFLITANTE",
+                409,
+            )
+        if (
+            anterior["situacao"] == entrada.situacao
+            and anterior["motivo"] == entrada.motivo
+        ):
+            return anterior
+        repositorio.atualizar(
+            conexao,
+            "crm_lead",
+            anterior["id"],
+            entrada.version,
+            {
+                "situacao": entrada.situacao,
+                "motivo": entrada.motivo,
+                "updatedBy": contexto.actorId,
+                "updatedAt": agoraUtc(),
+            },
+            contexto,
+        )
+        registrarEvento(
+            conexao,
+            empresaId,
+            "qualificacao",
+            f"Qualificação: {anterior['situacao']} → {entrada.situacao}."
+            + (f" Motivo: {entrada.motivo}" if entrada.motivo else ""),
+            contexto,
+        )
+        return repositorio.consultar(
+            conexao,
+            "SELECT * FROM crm_lead WHERE empresaId=:id AND organizationId=:org",
+            parametros,
+        )[0]
 
 
 def criarContato(
@@ -333,7 +393,14 @@ def salvarAtividade(
 
 
 def listarRelacionados(
-    tipo: str, busca: str, pagina: int, tamanho: int, contexto: ContextoLocal
+    tipo: str,
+    busca: str,
+    pagina: int,
+    tamanho: int,
+    contexto: ContextoLocal,
+    situacao: str = "",
+    prazo: str = "",
+    dataReferencia: date | None = None,
 ) -> dict:
     tabela = "crm_contato" if tipo == "contatos" else "crm_atividade"
     campo = "r.nomeNormalizado" if tipo == "contatos" else "r.titulo"
@@ -351,6 +418,22 @@ def listarRelacionados(
         parametros.update({"telefone": f"%{digitos}%", "temTelefone": bool(digitos)})
         filtroTelefone = " OR (:temTelefone AND r.telefoneNormalizado LIKE :telefone)"
     filtro = f"r.organizationId=:org AND e.organizationId=:org AND ({campo} LIKE :busca OR e.nomeNormalizado LIKE :busca{filtroTelefone})"
+    if tipo == "atividades":
+        if situacao:
+            filtro += " AND r.situacao=:situacao"
+            parametros["situacao"] = situacao
+        if prazo:
+            if dataReferencia is None:
+                raise ErroCrm("Informe a data de referência para filtrar os prazos.")
+            parametros["referencia"] = dataReferencia.isoformat()
+            if prazo == "vencidos":
+                filtro += " AND r.situacao='pendente' AND r.prazoData<:referencia"
+            elif prazo == "hoje":
+                filtro += " AND r.situacao='pendente' AND r.prazoData=:referencia"
+            elif prazo == "proximos":
+                filtro += " AND r.situacao='pendente' AND r.prazoData>:referencia"
+            elif prazo == "semData":
+                filtro += " AND r.situacao='pendente' AND r.prazoData IS NULL"
     with repositorio.transacao() as conexao:
         origem = (
             f"FROM {tabela} r JOIN crm_empresa e ON e.id=r.empresaId WHERE {filtro}"

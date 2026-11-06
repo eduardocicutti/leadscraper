@@ -42,6 +42,7 @@ export interface Atividade {
 }
 
 export interface DetalheEmpresa extends Empresa {
+  qualificacao: Qualificacao | null;
   contatos: Contato[];
   atividades: Atividade[];
   eventos: {
@@ -50,6 +51,13 @@ export interface DetalheEmpresa extends Empresa {
     autorNome: string;
     createdAt: string;
   }[];
+}
+
+export interface Qualificacao {
+  id: string;
+  situacao: "novo" | "analise" | "qualificado" | "desqualificado";
+  motivo: string;
+  version: number;
 }
 
 export interface PaginaCrm<T> {

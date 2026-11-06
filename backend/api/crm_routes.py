@@ -1,4 +1,6 @@
 from typing import Annotated
+from typing import Literal
+from datetime import date
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
@@ -14,6 +16,7 @@ from backend.api.crm_schemas import (
     ConversaoEntrada,
     EmpresaEdicao,
     EmpresaEntrada,
+    QualificacaoEntrada,
 )
 from backend.domain.crm import ContextoLocal, ErroCrm
 from backend.services import crm_service as servico
@@ -63,6 +66,11 @@ def editarEmpresa(empresaId: str, entrada: EmpresaEdicao, contexto: Contexto):
     return servico.editarEmpresa(empresaId, entrada, contexto)
 
 
+@rotas.put("/empresas/{empresaId}/qualificacao")
+def qualificarEmpresa(empresaId: str, entrada: QualificacaoEntrada, contexto: Contexto):
+    return servico.qualificarEmpresa(empresaId, entrada, contexto)
+
+
 @rotas.post("/empresas/{empresaId}/contatos", status_code=201)
 def criarContato(empresaId: str, entrada: ContatoEntrada, contexto: Contexto):
     return servico.criarContato(empresaId, entrada, contexto)
@@ -103,9 +111,17 @@ def converterSelecionado(
 
 @rotas.get("/atividades")
 def listarAtividades(
-    contexto: Contexto, busca: Busca = "", pagina: Pagina = 1, tamanho: Tamanho = 25
+    contexto: Contexto,
+    busca: Busca = "",
+    pagina: Pagina = 1,
+    tamanho: Tamanho = 25,
+    situacao: Literal["", "pendente", "concluida", "cancelada"] = "",
+    prazo: Literal["", "vencidos", "hoje", "proximos", "semData"] = "",
+    dataReferencia: date | None = None,
 ):
-    return servico.listarRelacionados("atividades", busca, pagina, tamanho, contexto)
+    return servico.listarRelacionados(
+        "atividades", busca, pagina, tamanho, contexto, situacao, prazo, dataReferencia
+    )
 
 
 def configurarCrm(app: FastAPI) -> None:

@@ -36,7 +36,16 @@ Listagem: `busca`, `pagina` e `tamanho`; empresas também aceitam `arquivadas`. 
 
 Organização local fixa no servidor. `X-Operador-Local` registra atribuição operacional e pode ser alterado pelo cliente: **não é autenticação nem autorização**. Não publicar este backend na internet. A interface continua com busca de menus no cabeçalho; a busca de dados fica nas telas do CRM neste incremento.
 
-O detalhe da empresa ainda carrega o histórico vinculado sem paginação interna. Antes de volume maior, paginar contatos, atividades e eventos dentro do detalhe. As tabelas de qualificação e os contratos preliminares estão preparados, mas ainda não há fluxo de qualificação entregue.
+O detalhe da empresa ainda carrega o histórico vinculado sem paginação interna. Antes de volume maior, paginar contatos, atividades e eventos dentro do detalhe.
+
+### Segundo incremento: qualificação e filtros de retorno
+
+- Qualificação disponível no detalhe: novo, em análise, qualificado e desqualificado. Desqualificar exige motivo; atualização mantém autor, instante, histórico e controle de versão. Salvar os mesmos valores com versão atual não cria evento nem incrementa versão.
+- `PUT /empresas/{empresaId}/qualificacao`: recebe `situacao`, `motivo` e `version`. O detalhe passa a incluir `qualificacao`. O estado convertido não está disponível: depende da operação atômica com oportunidade na fase 4. RF15 permanece parcialmente entregue.
+- `GET /atividades`: aceita `situacao` (`pendente`, `concluida`, `cancelada`), `prazo` (`vencidos`, `hoje`, `proximos`, `semData`) e `dataReferencia` em ISO. Os filtros são combinados com busca e paginação. Prazo restringe a atividades pendentes; concluídas/canceladas nunca reaparecem como vencidas.
+- `dataReferencia` é obrigatória quando há filtro de prazo, evitando usar implicitamente a data UTC do servidor. A interface calcula a data em America/Sao_Paulo; “Futuros” considera qualquer data posterior, não uma janela arbitrária de sete dias. O corte por prazo é por dia, ainda sem horário de lembrete.
+- 26 testes passaram, além de TypeScript e build Vite. Novos testes cobrem motivo obrigatório, conflito de versão, repetição sem evento extra, limites entre vencido/hoje/futuro, ausência de data e combinações de filtros.
+- Qualificação e filtro de vencidos exercitados no navegador com dados fictícios do mesmo banco isolado. Capturas em `docs/qa/fase-2-qualificacao/`; verificadas larguras 360 e 768 px. Não houve alteração estrutural do banco neste incremento.
 
 ## Prévia isolada
 
@@ -60,8 +69,8 @@ O detalhe da empresa ainda carrega o histórico vinculado sem paginação intern
 
 ## Próximos incrementos
 
-1. Qualificação do lead, filtros de relacionamento, busca de dados no cabeçalho e paginação interna do detalhe.
-2. Evoluir lembretes com filtros de vencimento e notificações, sem confundir data de retorno com instante de execução.
+1. Completar filtros de relacionamento, busca global por nome/telefone/CNPJ e paginação interna do detalhe.
+2. Evoluir lembretes com horário e notificações, sem confundir data de retorno com instante de execução.
 3. Serviço único de métricas por assessor e totais consolidados, conforme RF48–RF54, sem números fictícios.
 4. Prosseguir com o mapa na fase 3 e projetos/oportunidades na fase 4. Autenticação, permissões e sincronização continuam nas fases previstas.
 

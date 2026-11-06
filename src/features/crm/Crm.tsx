@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { QualificacaoLead } from "./QualificacaoLead";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -532,6 +533,14 @@ function Detalhes({
                 {erro}
               </p>
             )}
+            {empresa.qualificacao && (
+              <QualificacaoLead
+                key={`${empresa.id}:${empresa.qualificacao.version}`}
+                empresaId={empresaId}
+                qualificacao={empresa.qualificacao}
+                atualizar={atualizar}
+              />
+            )}
             <div className="crm-colunas">
               <section className="painel crm-formulario">
                 <h2>
@@ -643,6 +652,14 @@ export function Crm({ modo }: { modo: Modo }) {
   const [termo, definirTermo] = useState("");
   const [pagina, definirPagina] = useState(1);
   const [arquivadas, definirArquivadas] = useState(false);
+  const [situacao, definirSituacao] = useState("");
+  const [prazo, definirPrazo] = useState("");
+  const dataReferencia = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   const [criando, definirCriando] = useState(false);
   const [empresaId, definirEmpresaId] = useState<string | null>(null);
   const cliente = useQueryClient();
@@ -654,12 +671,22 @@ export function Crm({ modo }: { modo: Modo }) {
     return () => window.clearTimeout(temporizador);
   }, [busca]);
   const consulta = useQuery({
-    queryKey: ["crm", modo, termo, pagina, arquivadas],
+    queryKey: [
+      "crm",
+      modo,
+      termo,
+      pagina,
+      arquivadas,
+      situacao,
+      prazo,
+      dataReferencia,
+    ],
     queryFn: () =>
       consultarCrm<PaginaCrm<Empresa | Contato | Atividade>>(modo, {
         busca: termo,
         pagina,
         arquivadas,
+        ...(modo === "atividades" ? { situacao, prazo, dataReferencia } : {}),
       }),
     enabled: !empresaId,
   });
@@ -746,6 +773,45 @@ export function Crm({ modo }: { modo: Modo }) {
                 <option value="true">Arquivados</option>
               </select>
             </label>
+          )}
+          {modo === "atividades" && (
+            <>
+              <label className="campo">
+                <span>Filtrar situação</span>
+                <select
+                  value={situacao}
+                  onChange={(evento) => {
+                    definirSituacao(evento.target.value);
+                    definirPagina(1);
+                  }}
+                >
+                  <option value="">Todas</option>
+                  <option value="pendente">Pendentes</option>
+                  <option value="concluida">Concluídas</option>
+                  <option value="cancelada">Canceladas</option>
+                </select>
+              </label>
+              <label className="campo">
+                <span>Filtrar prazo</span>
+                <select
+                  value={prazo}
+                  onChange={(evento) => {
+                    definirPrazo(evento.target.value);
+                    definirPagina(1);
+                  }}
+                >
+                  <option value="">Todos os prazos</option>
+                  <option value="vencidos">Vencidos</option>
+                  <option value="hoje">Hoje</option>
+                  <option value="proximos">Futuros</option>
+                  <option value="semData">Sem data</option>
+                </select>
+              </label>
+              <p>
+                Filtros de prazo consideram apenas pendentes. Referência:{" "}
+                {dataReferencia.split("-").reverse().join("/")} (São Paulo).
+              </p>
+            </>
           )}
         </div>
       </section>

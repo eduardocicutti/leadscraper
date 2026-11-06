@@ -992,7 +992,7 @@ form.crm-formulario {
 .crm-filtros .campo:first-child {
   flex: 1 1 260px;
 }
-.crm-filtros .campo:last-child:not(:first-child) {
+.crm-filtros .campo:not(:first-child) {
   flex: 0 1 180px;
 }
 .crm-filtros .campo span {

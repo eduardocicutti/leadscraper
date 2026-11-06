@@ -272,6 +272,102 @@ def test_edicao_contato_busca_telefone_e_versao(cliente):
     assert cliente.get("/api/v1/crm/contatos?busca=27999990000").json()["total"] == 0
 
 
+def test_qualificacao_validacao_conflito_e_historico(cliente):
+    empresa = cadastrar(cliente)
+    caminho = f"/api/v1/crm/empresas/{empresa['id']}"
+    assert cliente.get(caminho).json()["qualificacao"]["situacao"] == "novo"
+    assert (
+        cliente.put(
+            f"{caminho}/qualificacao",
+            json={"situacao": "desqualificado", "motivo": "   ", "version": 1},
+        ).status_code
+        == 422
+    )
+    assert (
+        cliente.put(
+            f"{caminho}/qualificacao", json={"situacao": "convertido", "version": 1}
+        ).status_code
+        == 422
+    )
+    entrada = {"situacao": "qualificado", "motivo": "Perfil compatível", "version": 1}
+    resposta = cliente.put(f"{caminho}/qualificacao", json=entrada)
+    assert resposta.status_code == 200
+    assert resposta.json()["version"] == 2
+    assert cliente.put(f"{caminho}/qualificacao", json=entrada).status_code == 409
+    entrada["version"] = 2
+    assert cliente.put(f"{caminho}/qualificacao", json=entrada).json()["version"] == 2
+    detalhe = cliente.get(caminho).json()
+    assert (
+        len(
+            [
+                evento
+                for evento in detalhe["eventos"]
+                if evento["tipo"] == "qualificacao"
+            ]
+        )
+        == 1
+    )
+    assert detalhe["atividades"] == []
+    assert (
+        cliente.put(
+            "/api/v1/crm/empresas/inexistente/qualificacao", json=entrada
+        ).status_code
+        == 404
+    )
+
+
+def test_filtros_atividades_limites_data_e_situacao(cliente):
+    empresa = cadastrar(cliente)
+    caminho = f"/api/v1/crm/empresas/{empresa['id']}/atividades"
+    for titulo, prazo, situacao in [
+        ("Vencido", "2026-11-05", "pendente"),
+        ("Hoje", "2026-11-06", "pendente"),
+        ("Futuro", "2026-11-07", "pendente"),
+        ("Sem data", None, "pendente"),
+        ("Concluído", "2026-11-05", "concluida"),
+        ("Cancelado", "2026-11-05", "cancelada"),
+    ]:
+        assert (
+            cliente.post(
+                caminho,
+                json={
+                    "titulo": titulo,
+                    "prazoData": prazo,
+                    "situacao": situacao,
+                    "resultado": "Registrado",
+                    "responsavel": "Eduardo",
+                    "tipo": "lembrete",
+                },
+            ).status_code
+            == 201
+        )
+    for prazo, esperado in [
+        ("vencidos", "Vencido"),
+        ("hoje", "Hoje"),
+        ("proximos", "Futuro"),
+        ("semData", "Sem data"),
+    ]:
+        resposta = cliente.get(
+            "/api/v1/crm/atividades",
+            params={"prazo": prazo, "dataReferencia": "2026-11-06"},
+        ).json()
+        assert resposta["total"] == 1
+        assert resposta["itens"][0]["titulo"] == esperado
+    assert cliente.get("/api/v1/crm/atividades?situacao=concluida").json()["total"] == 1
+    assert cliente.get("/api/v1/crm/atividades?prazo=vencidos").status_code == 400
+    assert cliente.get("/api/v1/crm/atividades?prazo=invalido").status_code == 422
+    assert (
+        cliente.get("/api/v1/crm/atividades?dataReferencia=2026-02-30").status_code
+        == 422
+    )
+    assert (
+        cliente.get(
+            "/api/v1/crm/atividades?prazo=vencidos&situacao=concluida&dataReferencia=2026-11-06"
+        ).json()["total"]
+        == 0
+    )
+
+
 def test_migracao_invalida_reverte_estrutura(tmp_path, monkeypatch):
     caminho = tmp_path / "falha.db"
     monkeypatch.setattr(
