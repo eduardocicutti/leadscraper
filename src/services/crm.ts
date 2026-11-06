@@ -14,6 +14,8 @@ export interface Empresa {
   responsavel: string;
   arquivada: boolean;
   version: number;
+  qualificacaoSituacao?: string;
+  ultimoContatoEm?: string | null;
 }
 
 export interface Contato {
@@ -42,6 +44,10 @@ export interface Atividade {
 }
 
 export interface DetalheEmpresa extends Empresa {
+  paginacao: Record<
+    "contatos" | "atividades" | "eventos",
+    { pagina: number; total: number; tamanho: number }
+  >;
   qualificacao: Qualificacao | null;
   contatos: Contato[];
   atividades: Atividade[];

@@ -178,7 +178,11 @@ def editarEmpresa(
 
 
 def listarEmpresas(
-    busca: str, pagina: int, tamanho: int, arquivadas: bool, contexto: ContextoLocal
+    busca: str,
+    pagina: int,
+    tamanho: int,
+    arquivadas: bool | None,
+    contexto: ContextoLocal,
 ) -> dict:
     termo = normalizarTexto(busca)
     digitos = re.sub(r"\D", "", busca)
@@ -193,8 +197,9 @@ def listarEmpresas(
         "limite": tamanho,
         "inicio": (pagina - 1) * tamanho,
     }
-    filtro = """e.organizationId=:org AND e.arquivada=:arquivadas AND
+    filtro = """e.organizationId=:org AND (:arquivadas IS NULL OR e.arquivada=:arquivadas) AND
         (e.nomeNormalizado LIKE :busca OR e.cidadeNormalizada LIKE :busca OR
+        (:temTelefone AND e.cnpj LIKE :telefone) OR
         EXISTS (SELECT 1 FROM crm_contato c WHERE c.empresaId=e.id AND c.organizationId=:org
         AND (c.nomeNormalizado LIKE :busca OR (:temTelefone AND c.telefoneNormalizado LIKE :telefone))))"""
     with repositorio.transacao() as conexao:
@@ -205,13 +210,22 @@ def listarEmpresas(
         )[0]["total"]
         itens = repositorio.consultar(
             conexao,
-            f"SELECT e.* FROM crm_empresa e WHERE {filtro} ORDER BY e.nomeNormalizado,e.id LIMIT :limite OFFSET :inicio",
+            f"""SELECT e.*,
+            (SELECT situacao FROM crm_lead l WHERE l.empresaId=e.id AND l.organizationId=:org) AS qualificacaoSituacao,
+            (SELECT MAX(a.concluidaEm) FROM crm_atividade a WHERE a.empresaId=e.id AND a.organizationId=:org AND a.situacao='concluida' AND a.tipo IN ('ligacao','whatsapp','email','reuniao')) AS ultimoContatoEm
+            FROM crm_empresa e WHERE {filtro} ORDER BY e.nomeNormalizado,e.id LIMIT :limite OFFSET :inicio""",
             parametros,
         )
         return {"itens": itens, "total": total, "pagina": pagina, "tamanho": tamanho}
 
 
-def detalheEmpresa(empresaId: str, contexto: ContextoLocal) -> dict:
+def detalheEmpresa(
+    empresaId: str,
+    contexto: ContextoLocal,
+    paginaContatos: int = 1,
+    paginaAtividades: int = 1,
+    paginaEventos: int = 1,
+) -> dict:
     with repositorio.transacao() as conexao:
         empresa = repositorio.buscarEmpresa(conexao, empresaId, contexto)
         parametros = {"id": empresaId, "org": contexto.organizationId}
@@ -221,15 +235,31 @@ def detalheEmpresa(empresaId: str, contexto: ContextoLocal) -> dict:
             parametros,
         )
         empresa["qualificacao"] = qualificacoes[0] if qualificacoes else None
+        empresa["paginacao"] = {}
+        paginas = {
+            "contatos": paginaContatos,
+            "atividades": paginaAtividades,
+            "eventos": paginaEventos,
+        }
         for chave, tabela in (
             ("contatos", "crm_contato"),
             ("atividades", "crm_atividade"),
             ("eventos", "crm_evento"),
         ):
+            total = repositorio.consultar(
+                conexao,
+                f"SELECT count(*) AS total FROM {tabela} WHERE empresaId=:id AND organizationId=:org",
+                parametros,
+            )[0]["total"]
+            empresa["paginacao"][chave] = {
+                "total": total,
+                "pagina": paginas[chave],
+                "tamanho": 25,
+            }
             empresa[chave] = repositorio.consultar(
                 conexao,
-                f"SELECT * FROM {tabela} WHERE empresaId=:id AND organizationId=:org ORDER BY createdAt DESC,id DESC",
-                parametros,
+                f"SELECT * FROM {tabela} WHERE empresaId=:id AND organizationId=:org ORDER BY createdAt DESC,id DESC LIMIT 25 OFFSET :inicio",
+                {**parametros, "inicio": (paginas[chave] - 1) * 25},
             )
         return empresa
 

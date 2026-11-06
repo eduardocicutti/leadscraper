@@ -34,9 +34,19 @@ Rotas novas em `/api/v1/crm`:
 
 Listagem: `busca`, `pagina` e `tamanho`; empresas também aceitam `arquivadas`. Edições exigem `version`. Erros de negócio/validação retornam `code`, `message`, `fieldErrors` e `correlationId`; duplicidades incluem `candidatas`.
 
-Organização local fixa no servidor. `X-Operador-Local` registra atribuição operacional e pode ser alterado pelo cliente: **não é autenticação nem autorização**. Não publicar este backend na internet. A interface continua com busca de menus no cabeçalho; a busca de dados fica nas telas do CRM neste incremento.
+Organização local fixa no servidor. `X-Operador-Local` registra atribuição operacional e pode ser alterado pelo cliente: **não é autenticação nem autorização**. Não publicar este backend na internet. A busca do cabeçalho consulta menus e dados do CRM local.
 
-O detalhe da empresa ainda carrega o histórico vinculado sem paginação interna. Antes de volume maior, paginar contatos, atividades e eventos dentro do detalhe.
+O detalhe da empresa possui paginação independente de contatos, atividades e eventos, com limite de 25 registros por coleção em cada consulta.
+
+### Terceiro incremento: busca global e paginação do detalhe
+
+- Cabeçalho busca empresas por nome sem acentos, telefone com/sem pontuação e CNPJ completo com/sem máscara, além de continuar localizando menus. A busca por nome do contato retorna a empresa correspondente.
+- Resultados identificam arquivadas, responsável, qualificação e último contato concluído por ligação, WhatsApp, e-mail ou reunião. Tarefa interna, lembrete, coleta e atividade pendente não preenchem último contato. Sem interação concluída aparece “Não registrado”.
+- Selecionar resultado abre diretamente o cadastro, inclusive quando outra empresa já estava aberta. Enter abre o primeiro menu encontrado ou, na ausência de menu, o primeiro resultado estável do CRM. Escape ou saída do foco fecha os resultados. Consulta começa após dois caracteres e espera 300 ms de digitação; erro permite tentar novamente.
+- `GET /api/v1/crm/busca` aceita `busca`, `pagina`, `tamanho` (padrão 25, máximo 100), inclui ativos e arquivados e mantém a organização local definida no servidor. A lista normal de empresas continua separando ativos de arquivados.
+- `GET /api/v1/crm/empresas/{empresaId}` aceita `paginaContatos`, `paginaAtividades`, `paginaEventos`, todos a partir de 1. Arrays existentes são preservados no contrato, agora limitados a 25 itens. `paginacao` informa total, página e tamanho de cada coleção. Escritas e banco existente não foram alterados estruturalmente.
+- 28 testes passaram. Novos cenários verificam busca por CNPJ, último contato real versus tarefa interna, arquivamento e páginas sem sobreposição em 26 contatos. TypeScript e build web verificados; dados privados não foram usados como massa de teste.
+- Busca por telefone e abertura direta verificadas no navegador sobre o banco de prévia. Evidências locais em `docs/qa/fase-2-busca/`. A aprovação final de fidelidade visual segue pendente em `design-qa.md`.
 
 ### Segundo incremento: qualificação e filtros de retorno
 
@@ -69,7 +79,7 @@ O detalhe da empresa ainda carrega o histórico vinculado sem paginação intern
 
 ## Próximos incrementos
 
-1. Completar filtros de relacionamento, busca global por nome/telefone/CNPJ e paginação interna do detalhe.
+1. Completar filtros de relacionamento e revisão dos critérios de aceite da fase 2; conversão em oportunidade segue dependente da fase 4.
 2. Evoluir lembretes com horário e notificações, sem confundir data de retorno com instante de execução.
 3. Serviço único de métricas por assessor e totais consolidados, conforme RF48–RF54, sem números fictícios.
 4. Prosseguir com o mapa na fase 3 e projetos/oportunidades na fase 4. Autenticação, permissões e sincronização continuam nas fases previstas.

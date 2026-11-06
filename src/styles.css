@@ -311,6 +311,24 @@ p {
   padding: 8px;
   font-size: 0.875rem;
 }
+.busca-global {
+  max-height: min(65vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.busca-global h2 {
+  padding: 8px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.busca-global small {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.busca-global strong {
+  overflow-wrap: anywhere;
+}
 .perfil-local {
   display: flex;
   align-items: center;

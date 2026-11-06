@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { QualificacaoLead } from "./QualificacaoLead";
+import { PaginacaoDetalhe } from "./PaginacaoDetalhe";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -398,9 +399,25 @@ function Detalhes({
   voltar: () => void;
 }) {
   const cliente = useQueryClient();
+  const [paginaContatos, definirPaginaContatos] = useState(1);
+  const [paginaAtividades, definirPaginaAtividades] = useState(1);
+  const [paginaEventos, definirPaginaEventos] = useState(1);
   const consulta = useQuery({
-    queryKey: ["crm", "empresa", empresaId],
-    queryFn: () => consultarCrm<DetalheEmpresa>(`empresas/${empresaId}`),
+    queryKey: [
+      "crm",
+      "empresa",
+      empresaId,
+      paginaContatos,
+      paginaAtividades,
+      paginaEventos,
+    ],
+    queryFn: () =>
+      consultarCrm<DetalheEmpresa>(`empresas/${empresaId}`, {
+        paginaContatos,
+        paginaAtividades,
+        paginaEventos,
+      }),
+    placeholderData: (anterior) => anterior,
   });
   const [editando, definirEditando] = useState(false);
   const [contatoEditando, definirContatoEditando] = useState<
@@ -563,6 +580,12 @@ function Detalhes({
                 ) : (
                   <p>Nenhum contato cadastrado.</p>
                 )}
+                <PaginacaoDetalhe
+                  titulo="contatos"
+                  resumo={empresa.paginacao.contatos}
+                  alterar={definirPaginaContatos}
+                  estaCarregando={consulta.isFetching}
+                />
                 <FormularioContato
                   key={contatoEditando?.id || "novo"}
                   empresaId={empresaId}
@@ -624,6 +647,12 @@ function Detalhes({
                     )}
                   </ul>
                 )}
+                <PaginacaoDetalhe
+                  titulo="atividades"
+                  resumo={empresa.paginacao.atividades}
+                  alterar={definirPaginaAtividades}
+                  estaCarregando={consulta.isFetching}
+                />
               </section>
             </div>
             <section className="painel crm-formulario">
@@ -639,6 +668,12 @@ function Detalhes({
                   </li>
                 ))}
               </ol>
+              <PaginacaoDetalhe
+                titulo="eventos"
+                resumo={empresa.paginacao.eventos}
+                alterar={definirPaginaEventos}
+                estaCarregando={consulta.isFetching}
+              />
             </section>
           </>
         )
@@ -661,7 +696,10 @@ export function Crm({ modo }: { modo: Modo }) {
     day: "2-digit",
   }).format(new Date());
   const [criando, definirCriando] = useState(false);
-  const [empresaId, definirEmpresaId] = useState<string | null>(null);
+  const empresaId = useAppStore((estado) => estado.empresaSelecionadaId);
+  const definirEmpresaId = useAppStore(
+    (estado) => estado.definirEmpresaSelecionada,
+  );
   const cliente = useQueryClient();
   useEffect(() => {
     const temporizador = window.setTimeout(() => {

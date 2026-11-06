@@ -1,13 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  History,
-  Menu,
-  Monitor,
-  Search,
-  X,
-  Layers,
-  ChevronRight,
-} from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { BuscaGlobal } from "../features/crm/BuscaGlobal";
+import { History, Menu, Monitor, X, Layers } from "lucide-react";
 import { NAVEGACAO, type Tela } from "../config/navegacao";
 import { PRODUTO } from "../config/produto";
 import { useAppStore } from "../store";
@@ -33,8 +26,6 @@ export function Layout({
   const preferencias = usePreferencias();
   const conexao = useConexaoLocal();
   const [menuAberto, alterarMenu] = useState(false);
-  const [busca, alterarBusca] = useState("");
-  const campoBusca = useRef<HTMLInputElement>(null);
   const estaOnline =
     !conexao.isError && conexao.data?.ok && conexao.data.db_ready;
   const pagina = NAVEGACAO.find((item) => item.tela === tela);
@@ -43,13 +34,6 @@ export function Layout({
     tela === "agent"
       ? "Conexão e acompanhamento da execução local."
       : pagina?.descricao;
-  const itensEncontrados = busca.trim()
-    ? NAVEGACAO.filter((item) =>
-        item.titulo
-          .toLocaleLowerCase("pt-BR")
-          .includes(busca.trim().toLocaleLowerCase("pt-BR")),
-      )
-    : [];
 
   useEffect(() => {
     document.title = APP_TITLE;
@@ -60,16 +44,8 @@ export function Layout({
 
   useEffect(() => {
     const focarBusca = (evento: KeyboardEvent) => {
-      if (
-        (evento.ctrlKey || evento.metaKey) &&
-        evento.key.toLowerCase() === "k"
-      ) {
-        evento.preventDefault();
-        campoBusca.current?.focus();
-      }
       if (evento.key === "Escape") {
         alterarMenu(false);
-        alterarBusca("");
       }
     };
     document.addEventListener("keydown", focarBusca);
@@ -79,7 +55,6 @@ export function Layout({
   function abrirTela(destino: Tela) {
     navegar(destino);
     alterarMenu(false);
-    alterarBusca("");
     document
       .getElementById("conteudo-principal")
       ?.focus({ preventScroll: true });
@@ -174,39 +149,7 @@ export function Layout({
           >
             <Menu size={22} />
           </button>
-          <div className="busca-cabecalho">
-            <Search size={18} aria-hidden="true" />
-            <input
-              ref={campoBusca}
-              aria-label="Buscar menu"
-              placeholder="Buscar um menu…"
-              value={busca}
-              onChange={(evento) => alterarBusca(evento.target.value)}
-              onKeyDown={(evento) => {
-                if (evento.key === "Enter" && itensEncontrados[0])
-                  abrirTela(itensEncontrados[0].tela);
-              }}
-            />
-            <kbd>Ctrl K</kbd>
-            {busca.trim() && (
-              <div className="resultados-menu" aria-label="Menus encontrados">
-                {itensEncontrados.length ? (
-                  itensEncontrados.map((item) => (
-                    <button
-                      key={item.tela}
-                      onClick={() => abrirTela(item.tela)}
-                    >
-                      <item.icone size={18} />
-                      {item.titulo}
-                      <ChevronRight size={16} />
-                    </button>
-                  ))
-                ) : (
-                  <p>Nenhum menu encontrado.</p>
-                )}
-              </div>
-            )}
-          </div>
+          <BuscaGlobal navegar={abrirTela} />
           <div className="perfil-local">
             <span className="avatar">{getInitials(prospectador)}</span>
             <div>

@@ -6,6 +6,9 @@ type Status = "idle" | "pending" | "running" | "done" | "error";
 type View = Tela;
 
 interface AppStore {
+  empresaSelecionadaId: string | null;
+  definirEmpresaSelecionada: (id: string | null) => void;
+  abrirEmpresa: (id: string) => void;
   activeView: View;
   jobId: string | null;
   refreshJobId: string | null;
@@ -20,7 +23,11 @@ interface AppStore {
   prospectador: string;
   historyOpen: boolean;
   setActiveView: (view: View) => void;
-  setJob: (jobId: string, params: AppStore["searchParams"], maxResults: number) => void;
+  setJob: (
+    jobId: string,
+    params: AppStore["searchParams"],
+    maxResults: number,
+  ) => void;
   setRefreshJob: (jobId: string) => void;
   updateStatus: (data: StatusResponse) => void;
   openSavedLeads: (
@@ -36,6 +43,7 @@ interface AppStore {
 }
 
 const initialState = {
+  empresaSelecionadaId: null as string | null,
   activeView: "search" as View,
   jobId: null,
   refreshJobId: null,
@@ -52,11 +60,18 @@ const initialState = {
 };
 
 export const leadKey = (lead: Lead) =>
-  lead.url_maps || lead.telefone || `${lead.nome}-${lead.cidade}-${lead.estado}`;
+  lead.url_maps ||
+  lead.telefone ||
+  `${lead.nome}-${lead.cidade}-${lead.estado}`;
 
 export const useAppStore = create<AppStore>((set) => ({
   ...initialState,
-  setActiveView: (activeView) => set({ activeView, historyOpen: false }),
+  definirEmpresaSelecionada: (empresaSelecionadaId) =>
+    set({ empresaSelecionadaId }),
+  abrirEmpresa: (empresaSelecionadaId) =>
+    set({ empresaSelecionadaId, activeView: "companies", historyOpen: false }),
+  setActiveView: (activeView) =>
+    set({ activeView, historyOpen: false, empresaSelecionadaId: null }),
   setJob: (jobId, params, maxResults) =>
     set({
       activeView: "search",

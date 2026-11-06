@@ -368,6 +368,90 @@ def test_filtros_atividades_limites_data_e_situacao(cliente):
     )
 
 
+def test_busca_global_cnpj_contato_arquivados_e_ultima_interacao(cliente):
+    empresa = cadastrar(cliente, cnpj="04.252.011/0001-10", telefone="27999990000")
+    caminho = f"/api/v1/crm/empresas/{empresa['id']}"
+    for busca in ("04252011000110", "04.252.011/0001-10", "clinica sao", "27999990000"):
+        resultado = cliente.get("/api/v1/crm/busca", params={"busca": busca}).json()
+        assert resultado["total"] == 1
+        assert resultado["itens"][0]["ultimoContatoEm"] is None
+        assert resultado["itens"][0]["qualificacaoSituacao"] == "novo"
+    cliente.post(
+        f"{caminho}/atividades",
+        json={
+            "titulo": "Tarefa interna",
+            "tipo": "tarefa",
+            "situacao": "concluida",
+            "resultado": "Organizado",
+            "responsavel": "Eduardo",
+        },
+    )
+    assert (
+        cliente.get("/api/v1/crm/busca?busca=clinica").json()["itens"][0][
+            "ultimoContatoEm"
+        ]
+        is None
+    )
+    atividade = cliente.post(
+        f"{caminho}/atividades",
+        json={
+            "titulo": "Ligação realizada",
+            "tipo": "ligacao",
+            "situacao": "concluida",
+            "resultado": "Cliente pediu retorno",
+            "responsavel": "Eduardo",
+        },
+    ).json()
+    assert (
+        cliente.get("/api/v1/crm/busca?busca=clinica").json()["itens"][0][
+            "ultimoContatoEm"
+        ]
+        == atividade["concluidaEm"]
+    )
+    cliente.put(
+        caminho,
+        json={
+            "nome": empresa["nome"],
+            "cidade": empresa["cidade"],
+            "uf": empresa["uf"],
+            "cnpj": empresa["cnpj"],
+            "responsavel": "Eduardo",
+            "version": 1,
+            "arquivada": True,
+        },
+    )
+    assert (
+        cliente.get("/api/v1/crm/busca?busca=clinica").json()["itens"][0]["arquivada"]
+        == 1
+    )
+    assert cliente.get("/api/v1/crm/empresas?busca=clinica").json()["total"] == 0
+    assert cliente.get("/api/v1/crm/busca?busca=a").status_code == 422
+
+
+def test_paginacao_independente_detalhe(cliente):
+    empresa = cadastrar(cliente)
+    caminho = f"/api/v1/crm/empresas/{empresa['id']}"
+    for indice in range(26):
+        cliente.post(f"{caminho}/contatos", json={"nome": f"Contato {indice}"})
+    primeira = cliente.get(caminho).json()
+    segunda = cliente.get(
+        caminho, params={"paginaContatos": 2, "paginaEventos": 2}
+    ).json()
+    assert len(primeira["contatos"]) == len(primeira["eventos"]) == 25
+    assert len(segunda["contatos"]) == 1
+    assert segunda["paginacao"]["contatos"]["total"] == 26
+    assert segunda["paginacao"]["eventos"]["total"] == 27
+    assert (
+        len({contato["id"] for contato in primeira["contatos"] + segunda["contatos"]})
+        == 26
+    )
+    assert cliente.get(caminho, params={"paginaAtividades": 0}).status_code == 422
+    assert (
+        cliente.get("/api/v1/crm/empresas/inexistente?paginaEventos=2").status_code
+        == 404
+    )
+
+
 def test_migracao_invalida_reverte_estrutura(tmp_path, monkeypatch):
     caminho = tmp_path / "falha.db"
     monkeypatch.setattr(

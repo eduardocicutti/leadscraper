@@ -51,14 +51,32 @@ def listarEmpresas(
     return servico.listarEmpresas(busca, pagina, tamanho, arquivadas, contexto)
 
 
+@rotas.get("/busca")
+def buscarCrm(
+    contexto: Contexto,
+    busca: Annotated[str, Query(min_length=2, max_length=200)],
+    pagina: Pagina = 1,
+    tamanho: Tamanho = 25,
+):
+    return servico.listarEmpresas(busca, pagina, tamanho, None, contexto)
+
+
 @rotas.post("/empresas", status_code=201)
 def criarEmpresa(entrada: EmpresaEntrada, contexto: Contexto):
     return servico.criarEmpresa(entrada, contexto)
 
 
 @rotas.get("/empresas/{empresaId}")
-def detalheEmpresa(empresaId: str, contexto: Contexto):
-    return servico.detalheEmpresa(empresaId, contexto)
+def detalheEmpresa(
+    empresaId: str,
+    contexto: Contexto,
+    paginaContatos: Pagina = 1,
+    paginaAtividades: Pagina = 1,
+    paginaEventos: Pagina = 1,
+):
+    return servico.detalheEmpresa(
+        empresaId, contexto, paginaContatos, paginaAtividades, paginaEventos
+    )
 
 
 @rotas.put("/empresas/{empresaId}")
