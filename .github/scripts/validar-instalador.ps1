@@ -55,6 +55,7 @@ if ($Cenario -eq 'atualizacao') {
     $release = 'https://github.com/eduardocicutti/leadscraper/releases/download/v0.5.0'
     Invoke-WebRequest "$release/Lead.Scraper_0.5.0_x64-setup.exe" -OutFile $antigo
     $hashes = (Invoke-WebRequest "$release/SHA256SUMS.txt").Content
+    if ($hashes -is [byte[]]) { $hashes = [Text.Encoding]::UTF8.GetString($hashes) }
     $hash = (Get-FileHash -LiteralPath $antigo -Algorithm SHA256).Hash
     if ($hashes -notmatch "(?im)^$hash\s+.*setup\.exe\s*$") {
         throw 'O checksum do instalador anterior não confere.'
