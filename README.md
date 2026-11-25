@@ -91,7 +91,7 @@ O frontend carrega em `http://127.0.0.1:1420` e comunica com a API em `http://12
 python -m uvicorn main:app --port 8000
 ```
 
-> O arquivo `roda.bat` abre o navegador em `:8000`, mas a interface React exige o Vite ou o build em `dist/`. Prefira `npm run tauri dev` ou `npm run dev` + backend separado.
+Para abrir a interface React no navegador, siga os passos em [Demonstração no navegador](#demonstração-no-navegador).
 
 ### Build de produção
 
