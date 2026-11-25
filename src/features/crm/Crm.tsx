@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { QualificacaoLead } from "./QualificacaoLead";
 import { PaginacaoDetalhe } from "./PaginacaoDetalhe";
+import { QuadroAtividades, SITUACOES_ATIVIDADE } from "./QuadroAtividades";
 import { formatarDataCivil, formatarInstanteCrm } from "./formatarDatasCrm";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -42,6 +43,12 @@ const TIPOS_ATIVIDADE: Record<Atividade["tipo"], string> = {
   whatsapp: "WhatsApp",
   email: "E-mail",
   reuniao: "Reunião",
+};
+
+const ROTULOS_SITUACAO: Record<Atividade["situacao"], string> = {
+  pendente: "Pendente",
+  concluida: "Concluída",
+  cancelada: "Cancelada",
 };
 
 function Campo({
@@ -685,7 +692,7 @@ function Detalhes({
                       <li key={item.id}>
                         <strong>{item.titulo}</strong>
                         <span>
-                          {item.tipo} · {item.situacao} ·{" "}
+                          {TIPOS_ATIVIDADE[item.tipo]} · {ROTULOS_SITUACAO[item.situacao]} ·{" "}
                           {formatarDataCivil(item.prazoData)}
                         </span>
                         <span>{item.resultado}</span>
@@ -795,21 +802,16 @@ export function Crm({ modo }: { modo: Modo }) {
     queryFn: () =>
       consultarCrm(
         modo,
-        validarPaginaCrm<Empresa | Contato | Atividade>(
-          modo === "empresas" ? ehEmpresa : modo === "contatos" ? ehContato : ehAtividade,
-        ),
+        validarPaginaCrm<Empresa | Contato>(modo === "empresas" ? ehEmpresa : ehContato),
         {
           busca: termo,
           pagina,
           ...(modo === "empresas"
             ? { arquivadas, qualificacao, relacionamento, responsavel }
             : {}),
-          ...(modo === "atividades"
-            ? { situacao, prazo, dataReferencia, tipo, responsavel }
-            : {}),
         },
       ),
-    enabled: !empresaId,
+    enabled: !empresaId && modo !== "atividades",
   });
   if (empresaId)
     return (
@@ -819,7 +821,7 @@ export function Crm({ modo }: { modo: Modo }) {
         voltar={() => definirEmpresaId(null)}
       />
     );
-  if (criando)
+  if (criando && modo === "empresas")
     return (
       <FormularioEmpresa
         cancelar={() => definirCriando(false)}
@@ -846,22 +848,23 @@ export function Crm({ modo }: { modo: Modo }) {
     <div className="crm-espaco">
       <div className="crm-resumo">
         <div>
-          <span className="selo">CRM local · uso interno</span>
           <p>
             {modo === "empresas"
               ? "Cadastre empresas, consulte contatos e acompanhe o relacionamento."
               : modo === "contatos"
                 ? "Pessoas e canais de contato vinculados às empresas."
-                : "Retornos e lembretes de pós-venda. Abra a empresa para registrar ou reagendar."}
+                : "Abra o cadastro da empresa para registrar ou editar uma atividade."}
           </p>
         </div>
-        <Botao
-          variante="primario"
-          icone={Plus}
-          onClick={() => definirCriando(true)}
-        >
-          Nova empresa
-        </Botao>
+        {modo === "empresas" && (
+          <Botao
+            variante="primario"
+            icone={Plus}
+            onClick={() => definirCriando(true)}
+          >
+            Nova empresa
+          </Botao>
+        )}
       </div>
       <section className="painel crm-formulario">
         <div className="crm-filtros">
@@ -870,7 +873,9 @@ export function Crm({ modo }: { modo: Modo }) {
               <Search size={16} aria-hidden="true" />{" "}
               {modo === "empresas"
                 ? "Buscar por empresa, contato, cidade ou telefone"
-                : "Buscar por nome ou empresa"}
+                : modo === "contatos"
+                  ? "Buscar por contato, empresa ou telefone"
+                  : "Buscar por título da atividade ou empresa"}
             </span>
             <input
               type="search"
@@ -968,9 +973,9 @@ export function Crm({ modo }: { modo: Modo }) {
                   }}
                 >
                   <option value="">Todas</option>
-                  <option value="pendente">Pendentes</option>
-                  <option value="concluida">Concluídas</option>
-                  <option value="cancelada">Canceladas</option>
+                  {SITUACOES_ATIVIDADE.map(({ valor, titulo }) => (
+                    <option key={valor} value={valor}>{titulo}</option>
+                  ))}
                 </select>
               </label>
               <label className="campo">
@@ -990,17 +995,23 @@ export function Crm({ modo }: { modo: Modo }) {
                 </select>
               </label>
               <p>
-                Filtros de prazo consideram apenas pendentes. Referência:{" "}
-                {dataReferencia.split("-").reverse().join("/")} (São Paulo).
+                Filtros de prazo se aplicam às atividades pendentes. Hoje é{" "}
+                {formatarDataCivil(dataReferencia)} no horário de São Paulo.
               </p>
             </>
           )}
         </div>
       </section>
-      <section className="painel crm-formulario">
+      {modo === "atividades" ? (
+        <QuadroAtividades
+          filtros={{ busca: termo, prazo, dataReferencia, tipo, responsavel }}
+          situacao={situacao}
+          abrirEmpresa={definirEmpresaId}
+        />
+      ) : <section className="painel crm-formulario">
         <h2>
           <Icone size={22} aria-hidden="true" /> {titulo}{" "}
-          <span className="selo">{consulta.data?.total ?? "—"} registros</span>
+          {consulta.data && <span className="selo">{consulta.data.total}</span>}
         </h2>
         {consulta.isPending ? (
           <p role="status">Carregando registros…</p>
@@ -1020,14 +1031,10 @@ export function Crm({ modo }: { modo: Modo }) {
                 </caption>
                 <thead>
                   <tr>
-                    <th>{modo === "atividades" ? "Atividade" : "Nome"}</th>
+                    <th>Nome</th>
                     <th>{modo === "empresas" ? "Cidade / UF" : "Empresa"}</th>
                     <th>
-                      {modo === "empresas"
-                        ? "Responsável"
-                        : modo === "contatos"
-                          ? "Telefone / e-mail"
-                          : "Prazo / situação"}
+                      {modo === "empresas" ? "Responsável" : "Telefone / e-mail"}
                     </th>
                     <th>Ação</th>
                   </tr>
@@ -1037,7 +1044,7 @@ export function Crm({ modo }: { modo: Modo }) {
                     <tr key={item.id}>
                       <td>
                         <strong>
-                          {"titulo" in item ? item.titulo : item.nome}
+                          {item.nome}
                         </strong>
                         {"segmento" in item && <small>{item.segmento}</small>}
                       </td>
@@ -1051,11 +1058,9 @@ export function Crm({ modo }: { modo: Modo }) {
                       <td>
                         {"cidade" in item
                           ? item.responsavel
-                          : "telefone" in item
-                            ? [item.telefone, item.email]
-                                .filter(Boolean)
-                                .join(" · ") || "—"
-                            : `${formatarDataCivil(item.prazoData)} · ${item.situacao}`}
+                          : [item.telefone, item.email]
+                              .filter(Boolean)
+                              .join(" · ") || "—"}
                       </td>
                       <td>
                         <Botao
@@ -1077,12 +1082,14 @@ export function Crm({ modo }: { modo: Modo }) {
               <p className="crm-vazio">
                 {temFiltro
                   ? "Nenhum registro encontrado com os filtros selecionados."
-                  : "Nenhum registro ainda. Comece pelo cadastro de uma empresa."}
+                  : modo === "contatos"
+                    ? "Nenhum contato cadastrado. Abra uma empresa para adicionar um contato."
+                    : "Nenhuma empresa cadastrada."}
               </p>
             )}
             <div className="crm-resumo">
               <span>
-                Página {pagina} · {consulta.data?.total ?? 0} registros
+                Página {pagina} de {Math.max(1, Math.ceil((consulta.data?.total ?? 0) / (consulta.data?.tamanho ?? 25)))}
               </span>
               <div className="acoes">
                 <Botao
@@ -1101,7 +1108,7 @@ export function Crm({ modo }: { modo: Modo }) {
             </div>
           </>
         )}
-      </section>
+      </section>}
     </div>
   );
 }

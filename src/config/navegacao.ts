@@ -51,7 +51,7 @@ export const NAVEGACAO: ItemNavegacao[] = [
   {
     tela: "selected",
     titulo: "Leads",
-    descricao: "Sua lista preferencial, mensagens e contatos selecionados.",
+    descricao: "Consulte os leads da Lista Preferencial e prepare suas mensagens.",
     icone: ContactRound,
     grupo: 0,
   },
@@ -65,7 +65,7 @@ export const NAVEGACAO: ItemNavegacao[] = [
   {
     tela: "contacts",
     titulo: "Contatos",
-    descricao: "Pessoas, telefones e histórico de relacionamento.",
+    descricao: "Consulte pessoas, telefones e e-mails vinculados às empresas.",
     icone: UsersRound,
     grupo: 0,
   },
@@ -80,7 +80,7 @@ export const NAVEGACAO: ItemNavegacao[] = [
   {
     tela: "activities",
     titulo: "Atividades",
-    descricao: "Organize tarefas, retornos e lembretes de pós-venda.",
+    descricao: "Veja tarefas, interações e lembretes no quadro de atividades.",
     icone: CalendarDays,
     grupo: 0,
   },
@@ -102,7 +102,7 @@ export const NAVEGACAO: ItemNavegacao[] = [
   {
     tela: "spreadsheets",
     titulo: "Planilhas",
-    descricao: "Importe contatos e exporte suas listas de prospecção.",
+    descricao: "Importe leads para a Lista Preferencial e exporte registros.",
     icone: Sheet,
     grupo: 1,
   },
@@ -125,7 +125,7 @@ export const NAVEGACAO: ItemNavegacao[] = [
   {
     tela: "settings",
     titulo: "Configurações",
-    descricao: "Deixe a interface do seu jeito.",
+    descricao: "Ajuste o tema, a densidade e o tamanho do texto.",
     icone: Settings,
     grupo: 2,
   },

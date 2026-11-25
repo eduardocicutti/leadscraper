@@ -1138,6 +1138,41 @@ p {
   gap: 20px;
   min-width: 0;
 }
+.quadro-atividades {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.coluna-atividades {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.coluna-atividades h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cartoes-atividades {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+.cartoes-atividades li {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.cartoes-atividades li span {
+  color: var(--text-secondary);
+}
+.cartoes-atividades .botao {
+  justify-self: start;
+}
 .crm-resumo {
   display: flex;
   justify-content: space-between;

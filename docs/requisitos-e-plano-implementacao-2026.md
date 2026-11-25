@@ -77,6 +77,10 @@ As oito imagens fornecidas em 22/10/2026 passam a ser referência visual princip
 | RF18 | 4 P0 | Linha do tempo reúne atividades, alterações de etapa e vínculos com projetos. Dashboard apresenta total por etapa, tarefas vencidas e oportunidades ganhas/perdidas no período com filtros e definição de cada indicador. |
 | RF19 | 4 P1 | Mesclagem assistida com escolha de valores e registro dos IDs de origem. Sem aceite desta função, manter bloqueio de duplicidade e revisão manual; não remover dados para cumprir prazo. |
 
+**Quadro de atividades.** A visão local organiza as atividades existentes em Pendentes, Concluídas e Canceladas, com filtros por tipo, responsável e prazo. A edição continua no cadastro da empresa.
+
+**Distribuição de tarefas da equipe.** Com a autenticação e a matriz de acesso das fases 6A e 6B, o sistema deverá permitir que gerentes e diretores autorizados atribuam e reatribuam tarefas a membros ativos do setor sob sua gestão. O servidor deverá validar o escopo do gestor e registrar autor, responsável anterior, novo responsável e instante da mudança. O responsável deverá consultar e atualizar as tarefas conforme seu escopo. O aceite deverá incluir tentativas de atribuição por perfil sem permissão e entre setores fora do escopo, inclusive pela API.
+
 ### 4.3 Mapa e prospecção
 
 | ID | Fase e prioridade | Requisito e aceite |

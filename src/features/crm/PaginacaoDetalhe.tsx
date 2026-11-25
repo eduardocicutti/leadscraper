@@ -14,7 +14,7 @@ export function PaginacaoDetalhe({
   return (
     <nav className="crm-resumo" aria-label={`Paginação de ${titulo}`}>
       <small>
-        {resumo.total} registros · página {resumo.pagina}
+        {resumo.total} {resumo.total === 1 ? "registro" : "registros"} · página {resumo.pagina}
       </small>
       <div className="acoes">
         <Botao
