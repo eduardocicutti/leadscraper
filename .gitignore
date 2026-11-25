@@ -18,6 +18,7 @@ venv/
 *.log
 banco.db
 *.db
+*.municipios-ibge.json
 
 # Sidecar binaries (rebuild with build-sidecar.bat)
 src-tauri/binaries/*.exe

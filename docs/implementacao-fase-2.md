@@ -1,4 +1,4 @@
-# CRM local — primeiro incremento da fase 2
+# CRM local — fase 2
 
 Data: 26/10/2026. Uso pessoal e interno da empresa; não é um produto SaaS comercial.
 
@@ -31,12 +31,33 @@ Rotas novas em `/api/v1/crm`:
 | PUT | `/empresas/{empresaId}/atividades/{atividadeId}` | Editar ou reagendar |
 | GET | `/contatos` e `/atividades` | Listas paginadas |
 | POST | `/selecionados/{selectedId}/converter` | Inclusão idempotente; `empresaId` opcional para vinculação explícita |
+| POST | `/historico/{historicoId}/leads/{leadId}/converter` | Inclusão idempotente de resultado persistido; aceita o mesmo vínculo explícito |
 
-Listagem: `busca`, `pagina` e `tamanho`; empresas também aceitam `arquivadas`. Edições exigem `version`. Erros de negócio/validação retornam `code`, `message`, `fieldErrors` e `correlationId`; duplicidades incluem `candidatas`.
+Listagens aceitam `busca`, `pagina` e `tamanho`. Empresas aceitam também `arquivadas`, `qualificacao`, `responsavel` e `relacionamento` (`prospectada` ou `semAbordagem`). Atividades aceitam `tipo` e `responsavel` além dos filtros de situação e prazo. Edições exigem `version`. Erros de negócio e validação retornam `code`, `message`, `fieldErrors` e `correlationId`. Duplicidades incluem `candidatas`.
 
 Organização local fixa no servidor. `X-Operador-Local` registra atribuição operacional e pode ser alterado pelo cliente: **não é autenticação nem autorização**. Não publicar este backend na internet. A busca do cabeçalho consulta menus e dados do CRM local.
 
+### Limites da API local
+
+O backend aceita endereços de loopback como destino. Escritas vindas do navegador, quando incluem `Origin`, exigem uma origem local da interface autorizada. No modo web de desenvolvimento, use `http://127.0.0.1:1420` ou `http://localhost:1420`. A execução desktop usa as origens locais do Tauri. Clientes nativos e ferramentas locais podem chamar a API sem `Origin`, de modo que o isolamento continua dependendo da execução em loopback.
+
+IDs legados de lista e histórico são inteiros dentro do intervalo do SQLite. IDs das entidades do CRM são UUIDs. CNPJ e telefone continuam sendo textos. A API recebe datas de prazo no formato `AAAA-MM-DD`; instantes registrados usam UTC.
+
+O frontend valida as respostas do CRM antes de exibir ou usar seus dados. Os links de origem, site e WhatsApp só são exibidos quando têm endereço HTTP ou HTTPS válido, sem credenciais na URL. A restauração verifica a integridade e a compatibilidade em uma cópia separada, preserva um backup do banco corrente e reverte a ativação caso a abertura falhe.
+
+As exportações XLSX gravam os campos textuais de origem como texto e mantêm números e datas nos seus tipos. A auditoria de 24/11/2026 está registrada na matriz local `build/homologacao-fase2-0cyuzgnh/matriz-auditoria.md`. A revisão da configuração do Tauri foi estática. A validação do instalador e dos controles do shell depende de um ambiente com a ferramenta de build nativa.
+
 O detalhe da empresa possui paginação independente de contatos, atividades e eventos, com limite de 25 registros por coleção em cada consulta.
+
+### Quarto incremento: conversão de resultados e filtros de relacionamento
+
+- Resultados já gravados da coleta e do histórico usam a mesma confirmação de vínculo da Lista Preferencial. A migração `002_crm_origem_historico.sql` registra a origem e mantém as tabelas legadas. Em uma base existente, o migrador gera backup antes de aplicar a mudança.
+- Repetir a inclusão devolve a empresa vinculada. A confirmação de vínculo registra a origem na linha do tempo sem sobrescrever a empresa. O status de qualificação «convertido» depende da criação ou vinculação de oportunidade na fase 4.
+- Excluir uma entrada da Lista Preferencial preserva a origem registrada no CRM. Novos registros recebem IDs acima dos usados pela lista e pelos vínculos do CRM. Vínculos antigos cujo ID já tenha sido reutilizado exigem revisão manual.
+- O cadastro e a inclusão verificam CNPJ, URL de origem, nome com município e telefone normalizado. Quando todas as candidatas coincidem apenas por telefone, `confirmarTelefoneCompartilhado` permite cadastrar a outra empresa separadamente. O conflito informa `somenteTelefone` por candidata.
+- O filtro de empresas já prospectadas considera ligações, WhatsApp, e-mails ou reuniões concluídas com resultado registrado. Tarefas, lembretes e atividades pendentes ficam fora desse filtro.
+- Em 24/11/2026, o roteiro em Edge validou a Lista Preferencial, o histórico, a confirmação e o cancelamento de vínculos, o telefone compartilhado, a busca formatada, os filtros e a recuperação da linha do tempo após reiniciar o backend. O resultado de coleta foi simulado com IDs persistidos e a conversão foi executada pela API real. Capturas locais em `build/homologacao-fase2-iao1ej37/` registram as larguras 1536, 768 e 360 px e os dois temas.
+- A suíte completa passou com 34 testes, incluindo a migração sobre uma base com o CRM anterior e a preservação dos vínculos quando uma entrada da Lista Preferencial é excluída. O build web passou.
 
 ### Terceiro incremento: busca global e paginação do detalhe
 
@@ -79,9 +100,8 @@ O detalhe da empresa possui paginação independente de contatos, atividades e e
 
 ## Próximos incrementos
 
-1. Completar filtros de relacionamento e revisão dos critérios de aceite da fase 2; conversão em oportunidade segue dependente da fase 4.
-2. Evoluir lembretes com horário e notificações, sem confundir data de retorno com instante de execução.
-3. Serviço único de métricas por assessor e totais consolidados, conforme RF48–RF54, sem números fictícios.
-4. Prosseguir com o mapa na fase 3 e projetos/oportunidades na fase 4. Autenticação, permissões e sincronização continuam nas fases previstas.
+1. Prosseguir com o mapa na fase 3 após a revisão do aceite da fase 2. Projetos, oportunidades e a qualificação como convertido seguem na fase 4.
+2. Evoluir lembretes com horário e notificações, com data de retorno e instante de execução tratados separadamente.
+3. Implementar o serviço único de métricas por assessor e totais consolidados, conforme RF48–RF54. Autenticação, permissões e sincronização continuam nas fases previstas.
 
-Não declarar a fase 2 inteira concluída, nem o visual final aprovado. Logo oficial e diferenças das telas legadas continuam registrados em `design-qa.md`.
+A qualificação como convertido (RF15) permanece vinculada ao pipeline da fase 4. O aceite visual geral e as diferenças das telas legadas continuam registrados em `design-qa.md`.

@@ -128,8 +128,25 @@ p {
   gap: 12px;
   padding: 16px 10px;
 }
-.marca > svg {
-  color: var(--blue-action);
+.logo-adapti {
+  width: 3rem;
+  display: block;
+  flex: none;
+}
+.logo-adapti img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.logo-adapti .logo-adapti-claro,
+:root[data-tema="claro"] .logo-adapti-escuro {
+  display: none;
+}
+:root[data-tema="claro"] .logo-adapti-claro {
+  display: block;
+}
+.apresentacao-produto .logo-adapti {
+  width: 4.5rem;
 }
 .marca strong {
   font-size: 1.25rem;
@@ -509,12 +526,177 @@ p {
 }
 .prospeccao-layout {
   display: grid;
-  grid-template-columns: 350px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
-  align-items: start;
 }
 .formulario-prospeccao {
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+  column-gap: 24px;
+  align-items: start;
   padding: 18px;
+}
+.formulario-prospeccao > :not(.mapa-ufs) {
+  grid-column: 1;
+}
+.mapa-ufs {
+  grid-column: 2;
+  grid-row: 1 / span 7;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.mapa-ufs svg {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  margin: auto;
+}
+.mapa-ufs figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+.mapa-ufs a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.mapa-uf {
+  fill: var(--blue-dim);
+  stroke: var(--text-muted);
+  stroke-width: 0.8;
+  cursor: pointer;
+}
+.mapa-uf:hover,
+.mapa-uf:focus-visible {
+  fill: var(--border);
+}
+.mapa-uf[aria-pressed="true"] {
+  fill: var(--blue-action);
+  stroke: var(--text-primary);
+}
+.mapa-ufs svg[aria-disabled="true"] .mapa-uf {
+  cursor: default;
+}
+.seletor-municipio {
+  position: relative;
+}
+.opcoes-municipio {
+  position: absolute;
+  inset: 100% 0 auto;
+  z-index: 2;
+  max-height: 240px;
+  overflow: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 20px #0003;
+}
+.opcoes-municipio [role="option"] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.opcoes-municipio [role="option"]:hover,
+.opcoes-municipio [aria-selected="true"] {
+  background: var(--bg-hover);
+}
+.opcoes-municipio small {
+  color: var(--text-muted);
+}
+.opcoes-municipio p {
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+.catalogo-municipios {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.quantidade-prospeccao {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+.quantidade-prospeccao input {
+  grid-column: span 2;
+  min-height: 32px;
+}
+.revisao-prospeccao {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.revisao-prospeccao dl {
+  display: grid;
+  gap: 8px;
+}
+.revisao-prospeccao dt,
+.status-prospeccao p,
+.medicao-prospeccao dt {
+  color: var(--text-secondary);
+}
+.revisao-prospeccao dd {
+  overflow-wrap: anywhere;
+}
+.status-prospeccao {
+  display: grid;
+  gap: 12px;
+}
+.status-prospeccao progress {
+  width: 100%;
+  height: 8px;
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  color: var(--blue-action);
+  background: var(--bg-hover);
+}
+.status-prospeccao[data-situacao="error"] progress {
+  color: var(--danger);
+}
+.status-prospeccao progress::-webkit-progress-bar {
+  background: var(--bg-hover);
+}
+.status-prospeccao progress::-webkit-progress-value {
+  background: currentColor;
+}
+.status-prospeccao progress::-moz-progress-bar {
+  background: currentColor;
+}
+.medicao-prospeccao {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 12px;
+}
+.medicao-prospeccao dd {
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .fonte-atual {
   display: flex;
@@ -550,12 +732,6 @@ p {
 .formulario-prospeccao legend svg {
   color: var(--text-secondary);
 }
-.campos-localizacao {
-  display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
-  gap: 12px;
-  clear: both;
-}
 .ajuda-campo {
   color: var(--text-muted);
   font-size: 0.75rem;
@@ -578,7 +754,7 @@ p {
 }
 .presets {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   clear: both;
   margin-bottom: 14px;
@@ -589,6 +765,12 @@ p {
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 0.8125rem;
+}
+.presets button[aria-pressed="true"],
+.chips button[aria-pressed="true"] {
+  background: var(--blue-dim);
+  border-color: var(--blue-action);
+  color: var(--text-primary);
 }
 .resumo-fonte {
   display: flex;
@@ -734,14 +916,19 @@ p {
 .pular-conteudo {
   position: fixed;
   left: 12px;
-  top: -100px;
+  top: 12px;
   padding: 12px;
   background: var(--blue-action);
   color: white;
   z-index: 100;
 }
-.pular-conteudo:focus {
-  top: 12px;
+.pular-conteudo:not(:focus) {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .pagina > .flex-1 {
   padding: 0;
@@ -829,7 +1016,6 @@ p {
     padding: 22px;
   }
   .prospeccao-layout {
-    grid-template-columns: 300px minmax(0, 1fr);
     gap: 16px;
   }
   .area-conteudo {
@@ -840,8 +1026,13 @@ p {
   }
 }
 @media (max-width: 960px) {
-  .prospeccao-layout {
-    grid-template-columns: 1fr;
+  .formulario-prospeccao {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mapa-ufs {
+    grid-column: 1;
+    grid-row: auto;
+    margin-block: 4px 18px;
   }
   .resultados-prospeccao {
     min-height: 0;

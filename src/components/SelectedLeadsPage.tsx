@@ -10,6 +10,8 @@ import {
 } from "../api";
 import { useAppStore } from "../store";
 import { ConverterLead } from "../features/crm/ConverterLead";
+import { idLegadoValido } from "../utils/idLegadoValido";
+import { urlHttp } from "../utils/urlHttp";
 
 const TEMPLATE_VARS = ["empresa", "segmento", "cidade", "estado", "prospectador"];
 
@@ -201,17 +203,20 @@ export function SelectedLeadsPage() {
       id: number;
       notes?: string;
       custom_message?: string;
-    }) =>
-      api
-        .patch<SelectedLead>(`/selected-leads/${id}`, { notes, custom_message })
-        .then((r) => r.data),
+    }) => {
+      if (!idLegadoValido(id)) throw new Error("Lead inválido.");
+      return api.patch<SelectedLead>(`/selected-leads/${id}`, { notes, custom_message });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["selected-leads"] });
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.delete(`/selected-leads/${id}`),
+    mutationFn: (id: number) => {
+      if (!idLegadoValido(id)) throw new Error("Lead inválido.");
+      return api.delete(`/selected-leads/${id}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["selected-leads"] });
     },
@@ -486,6 +491,9 @@ export function SelectedLeadsPage() {
               <tbody>
                 {filtered.map((lead) => {
                   const badge = tempBadge(lead.classificacao);
+                  const site = urlHttp(lead.site);
+                  const urlMaps = urlHttp(lead.url_maps);
+                  const urlWhatsApp = lead.is_whatsapp ? urlHttp(lead.whatsapp_link) : undefined;
                   return (
                     <tr
                       key={lead.id}
@@ -536,9 +544,9 @@ export function SelectedLeadsPage() {
                         />
                       </td>
                       <td className={cellClass}>
-                        {lead.site ? (
+                        {site ? (
                           <a
-                            href={lead.site}
+                            href={site}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex h-6 w-6 items-center justify-center text-[#4a5568] hover:text-[#8896ac]"
@@ -550,9 +558,9 @@ export function SelectedLeadsPage() {
                         )}
                       </td>
                       <td className={cellClass}>
-                        {lead.url_maps ? (
+                        {urlMaps ? (
                           <a
-                            href={lead.url_maps}
+                            href={urlMaps}
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex h-6 w-6 items-center justify-center text-[#4a5568] hover:text-[#8896ac]"
@@ -566,9 +574,9 @@ export function SelectedLeadsPage() {
                       <td className={cellClass}>
                         <div className="flex items-center gap-1">
                           <ConverterLead leadId={lead.id} />
-                          {lead.is_whatsapp && lead.whatsapp_link ? (
+                          {urlWhatsApp ? (
                             <a
-                              href={lead.whatsapp_link}
+                              href={urlWhatsApp}
                               target="_blank"
                               rel="noreferrer"
                               className="h-7 px-2 bg-transparent border border-[#1e2d45] rounded-sm text-[11px] text-[#25d366] hover:border-[#25d366] transition-colors duration-100 inline-flex items-center gap-1"

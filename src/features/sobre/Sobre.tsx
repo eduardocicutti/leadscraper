@@ -10,7 +10,6 @@ import {
   HardDrive,
   RefreshCw,
   Upload,
-  Layers,
 } from "lucide-react";
 import {
   api,
@@ -23,6 +22,7 @@ import { useAppStore } from "../../store";
 import { useConexaoLocal } from "../../services/conexao";
 import { Painel } from "../../components/ui/Painel";
 import { Botao } from "../../components/ui/Botao";
+import { LogoAdapti } from "../../components/ui/LogoAdapti";
 
 export function Sobre() {
   const cache = useQueryClient();
@@ -113,7 +113,7 @@ export function Sobre() {
   return (
     <div className="grade-sobre">
       <Painel className="apresentacao-produto">
-        <Layers size={48} className="icone-destaque" aria-hidden="true" />
+        <LogoAdapti />
         <div>
           <div className="linha-titulo">
             <h2>{PRODUTO.nome}</h2>

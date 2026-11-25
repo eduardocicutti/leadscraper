@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Botao } from "../../components/ui/Botao";
 import {
+  ehQualificacao,
   mensagemErroCrm,
   salvarCrm,
   type Qualificacao,
@@ -28,6 +29,7 @@ export function QualificacaoLead({
     try {
       await salvarCrm(
         `empresas/${empresaId}/qualificacao`,
+        ehQualificacao,
         { situacao, motivo, version: qualificacao.version },
         true,
       );

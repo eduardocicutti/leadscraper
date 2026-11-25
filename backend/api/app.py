@@ -1,15 +1,18 @@
 import io
 import os
-import threading
 import traceback
 import base64
+from binascii import Error as ErroBase64
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from backend.api.schemas import (
     BackupRestoreRequest,
@@ -23,21 +26,23 @@ from backend.api.schemas import (
     SpreadsheetImportRequest,
 )
 from backend.api.crm_routes import configurarCrm
+from backend.api.prospeccao_routes import rotas as rotasProspeccao
 from backend.core.logging import logger
 from backend.repositories import database
 from backend.services.export_service import generate_xlsx
 from backend.services.import_service import parse_leads_spreadsheet
-from backend.services.job_store import get_job, init_job
+from backend.services.job_store import get_job, iniciarJob, respostaJob
 from backend.services.refresh_service import refresh_history_worker, refresh_leads_worker
-from backend.services.scrape_service import scrape_worker
+from backend.services.scrape_service import iniciarColeta
 
 
-def _start_job(worker, *args) -> str:
-    job_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
-    init_job(job_id)
-    thread = threading.Thread(target=worker, args=(job_id, *args), daemon=True)
-    thread.start()
-    return job_id
+ORIGENS_INTERFACE_LOCAL = (
+    "http://localhost:1420",
+    "http://127.0.0.1:1420",
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+)
 
 
 @asynccontextmanager
@@ -54,17 +59,38 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(lifespan=lifespan)
     configurarCrm(app)
+    app.include_router(rotasProspeccao)
+
+    @app.middleware("http")
+    async def conferirOrigemDaEscrita(
+        pedido: Request, prosseguir: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        origem = pedido.headers.get("origin")
+        if (
+            pedido.method not in {"GET", "HEAD", "OPTIONS"}
+            and origem is not None
+            and origem not in ORIGENS_INTERFACE_LOCAL
+        ):
+            mensagem = "Origem não permitida."
+            return JSONResponse(
+                {
+                    "error": mensagem,
+                    "code": "ORIGEM_NAO_PERMITIDA",
+                    "message": mensagem,
+                    "fieldErrors": [],
+                    "correlationId": str(uuid4()),
+                },
+                status_code=403,
+            )
+        return await prosseguir(pedido)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:1420",
-            "http://127.0.0.1:1420",
-            "tauri://localhost",
-            "http://tauri.localhost",
-        ],
+        allow_origins=ORIGENS_INTERFACE_LOCAL,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
 
     @app.post("/scrape")
     async def start_scrape(req: ScrapeRequest):
@@ -86,21 +112,13 @@ def create_app() -> FastAPI:
                     status_code=400,
                 )
 
-            job_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
-            init_job(job_id)
-            thread = threading.Thread(
-                target=scrape_worker,
-                args=(
-                    job_id,
-                    req.segmento,
-                    req.cidade,
-                    req.estado,
-                    req.max_results,
-                    req.prospectador,
-                ),
-                daemon=True,
+            job_id = iniciarColeta(
+                req.segmento,
+                req.cidade,
+                req.estado,
+                req.max_results,
+                req.prospectador,
             )
-            thread.start()
             logger.info("Scraper thread started job_id=%s", job_id)
             return {"job_id": job_id}
         except Exception:
@@ -112,20 +130,13 @@ def create_app() -> FastAPI:
             )
 
     @app.get("/status/{job_id}")
-    async def get_status(job_id: str):
+    async def get_status(job_id: str, somenteProgresso: bool = False):
         try:
             job = get_job(job_id)
             if job is None:
                 logger.warning("Status requested for unknown job_id=%s", job_id)
                 return JSONResponse({"error": "Job não encontrado"}, status_code=404)
-            return {
-                "status": job.get("status"),
-                "progress": job.get("progress", 0),
-                "total": job.get("total", 0),
-                "log": job.get("log", ""),
-                "leads_count": len(job.get("leads", [])),
-                "leads": job.get("leads", []),
-            }
+            return respostaJob(job, somenteProgresso)
         except Exception:
             logger.exception("Failed to get status for job %s", job_id)
             traceback.print_exc()
@@ -211,8 +222,10 @@ def create_app() -> FastAPI:
     @app.post("/restore")
     async def restore_backup(req: BackupRestoreRequest):
         try:
-            content = base64.b64decode(req.content_base64)
+            content = base64.b64decode(req.content_base64, validate=True)
             return database.restore_backup_bytes(content, req.filename)
+        except (ErroBase64, UnicodeEncodeError):
+            return JSONResponse({"error": "Conteúdo do backup inválido."}, status_code=400)
         except ValueError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
         except Exception:
@@ -248,7 +261,7 @@ def create_app() -> FastAPI:
             detail = database.get_search_history_detail(history_id)
             if detail is None:
                 return JSONResponse({"error": "Histórico não encontrado"}, status_code=404)
-            job_id = _start_job(refresh_history_worker, history_id)
+            job_id = iniciarJob(refresh_history_worker, history_id)
             return {"job_id": job_id}
         except Exception:
             logger.exception("Failed to start refresh for history id=%s", history_id)
@@ -260,7 +273,7 @@ def create_app() -> FastAPI:
         try:
             if not req.history_ids:
                 return JSONResponse({"error": "Selecione ao menos uma prospecção."}, status_code=400)
-            job_id = _start_job(refresh_leads_worker, req.history_ids)
+            job_id = iniciarJob(refresh_leads_worker, req.history_ids)
             return {"job_id": job_id}
         except Exception:
             logger.exception("Failed to start batch refresh")

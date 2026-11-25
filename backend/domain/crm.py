@@ -5,6 +5,7 @@ from uuid import UUID, uuid5
 
 
 ORGANIZACAO_LOCAL = "00000000-0000-4000-8000-000000000001"
+MAXIMO_INTEIRO_SQLITE = 2**63 - 1
 
 
 @dataclass(frozen=True)

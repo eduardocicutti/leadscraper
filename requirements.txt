@@ -1,4 +1,5 @@
 fastapi==0.162.0
+opentelemetry-api==1.45.2
 uvicorn==0.54.0
 sqlmodel==0.0.27
 SQLAlchemy==2.0.44

@@ -1,6 +1,9 @@
 import base64
+import io
 import os
+import sqlite3
 import pytest
+from contextlib import closing
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, unquote, urlparse
@@ -9,11 +12,13 @@ from fastapi.testclient import TestClient
 from openpyxl import load_workbook
 
 from backend.api.app import create_app
+from backend.repositories import database
+from backend.services.export_service import generate_xlsx
 
 
 def make_client(tmp_path: str) -> TestClient:
     os.environ["DB_PATH"] = str(Path(tmp_path) / "test.db")
-    return TestClient(create_app())
+    return TestClient(create_app(), base_url="http://127.0.0.1")
 
 
 def csv_payload(text: str, filename: str = "leads.csv") -> dict:
@@ -163,3 +168,123 @@ ClÃ­nica Boa Vida;(11) 91234-5678;SÃ£o Paulo;SP;ClÃ­nica
             restored = client.get("/selected-leads").json()
             assert len(restored) == 1
             assert restored[0]["nome"] == "ClÃ­nica Boa Vida"
+
+
+def test_backup_gerado_inclui_alteracoes_do_wal_de_base_maior(tmp_path):
+    with make_client(str(tmp_path)) as cliente:
+        origem = tmp_path / "test.db"
+        with closing(sqlite3.connect(origem)) as conexao:
+            conteudo = "registro de teste\n" * 70000
+            conexao.execute(
+                "INSERT INTO appsetting (key,value,updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                ("teste_backup", conteudo),
+            )
+            conexao.commit()
+            resposta = cliente.get("/backup")
+            assert resposta.status_code == 200
+            assert len(resposta.content) > 1024 * 1024
+        arquivo = tmp_path / "copia.db"
+        arquivo.write_bytes(resposta.content)
+        with closing(sqlite3.connect(arquivo)) as copia:
+            assert copia.execute(
+                "SELECT value FROM appsetting WHERE key='teste_backup'"
+            ).fetchone() == (conteudo,)
+
+
+def test_api_local_reconhece_origem_do_desktop(tmp_path):
+    with make_client(str(tmp_path)) as cliente:
+        resposta = cliente.post(
+            "/api/v1/crm/empresas",
+            headers={"Origin": "https://tauri.localhost"},
+            json={"nome": "Empresa de teste", "responsavel": "Ana"},
+        )
+        assert resposta.status_code == 201
+        assert resposta.headers["access-control-allow-origin"] == "https://tauri.localhost"
+        assert cliente.get("http://testserver/health").status_code == 400
+        origemNaoPermitida = cliente.post(
+            "/health", headers={"Origin": "https://example.com"}
+        )
+        assert origemNaoPermitida.status_code == 403
+        assert origemNaoPermitida.json()["code"] == "ORIGEM_NAO_PERMITIDA"
+        assert origemNaoPermitida.json()["correlationId"]
+
+
+def test_restore_incompativel_preserva_banco_ativo(tmp_path):
+    arquivo = tmp_path / "outro-app.db"
+    with closing(sqlite3.connect(arquivo)) as conexao:
+        conexao.execute("CREATE TABLE itens (id INTEGER PRIMARY KEY)")
+    with make_client(str(tmp_path)) as cliente:
+        assert cliente.post(
+            "/api/v1/crm/empresas",
+            json={"nome": "Empresa preservada", "responsavel": "Ana"},
+        ).status_code == 201
+        resposta = cliente.post(
+            "/restore",
+            json={"content_base64": base64.b64encode(arquivo.read_bytes()).decode("ascii")},
+        )
+        assert resposta.status_code == 400
+        assert cliente.get("/api/v1/crm/empresas").json()["total"] == 1
+    assert not list(tmp_path.glob("banco-before-restore-*"))
+    assert not list(tmp_path.glob(".restore-*"))
+
+
+def test_restore_com_migracao_marcada_e_coluna_crm_ausente(tmp_path):
+    with make_client(str(tmp_path)) as cliente:
+        assert cliente.post(
+            "/api/v1/crm/empresas",
+            json={"nome": "Empresa preservada", "responsavel": "Ana"},
+        ).status_code == 201
+        arquivo = tmp_path / "backup-incompleto.db"
+        arquivo.write_bytes(cliente.get("/backup").content)
+        with closing(sqlite3.connect(arquivo)) as conexao:
+            conexao.execute("ALTER TABLE crm_atividade DROP COLUMN resultado")
+        resposta = cliente.post(
+            "/restore",
+            json={"content_base64": base64.b64encode(arquivo.read_bytes()).decode("ascii")},
+        )
+        assert resposta.status_code == 400
+        assert cliente.get("/api/v1/crm/empresas").json()["total"] == 1
+
+
+def test_exportacao_excel_preserva_textos_e_tipos_das_celulas():
+    arquivo = generate_xlsx(
+        [{"nome": "= Em revisão", "score": 50}], "= Pesquisa interna", "São Mateus", "ES", "Ana"
+    )
+    planilha = load_workbook(io.BytesIO(arquivo))
+    try:
+        empresa = planilha["Página1"]["C2"]
+        assert (empresa.value, empresa.data_type) == ("= Em revisão", "s")
+        segmento = planilha["Resumo"]["B4"]
+        assert (segmento.value, segmento.data_type) == ("= Pesquisa interna", "s")
+        assert planilha["Página1"]["G2"].value is False
+        assert planilha["Página1"]["O2"].value == 50
+    finally:
+        planilha.close()
+
+
+def test_falha_na_ativacao_recarrega_banco_anterior(tmp_path, monkeypatch):
+    with make_client(str(tmp_path)) as cliente:
+        arquivo = cliente.get("/backup").content
+        assert cliente.post(
+            "/api/v1/crm/empresas",
+            json={"nome": "Empresa depois do backup", "responsavel": "Ana"},
+        ).status_code == 201
+        iniciarBanco = database.init_db
+        falhouAtivacao = False
+
+        def simularFalhaDeAtivacao(caminho: str) -> None:
+            nonlocal falhouAtivacao
+            if not falhouAtivacao:
+                falhouAtivacao = True
+                raise OSError("Falha de ativação simulada.")
+            iniciarBanco(caminho)
+
+        monkeypatch.setattr(database, "init_db", simularFalhaDeAtivacao)
+        resposta = cliente.post(
+            "/restore",
+            json={"content_base64": base64.b64encode(arquivo).decode("ascii")},
+        )
+        assert resposta.status_code == 500
+        assert falhouAtivacao
+        assert cliente.get("/api/v1/crm/empresas").json()["total"] == 1
+    assert len(list(tmp_path.glob("banco-before-restore-*"))) == 1

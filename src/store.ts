@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Lead, SearchRequest, StatusResponse } from "./api";
+import type { Lead, MedicaoColeta, SearchRequest, StatusResponse } from "./api";
 import type { Tela } from "./config/navegacao";
 
 type Status = "idle" | "pending" | "running" | "done" | "error";
@@ -16,6 +16,8 @@ interface AppStore {
   progress: number;
   total: number;
   log: string;
+  medicaoColeta: MedicaoColeta | null;
+  concluiuComAvisos: boolean;
   leads: Lead[];
   selectedLeadKeys: string[];
   searchParams: Omit<SearchRequest, "max_results"> | null;
@@ -34,6 +36,7 @@ interface AppStore {
     params: AppStore["searchParams"],
     leads: Lead[],
     historyId?: number,
+    concluiuComAvisos?: boolean,
   ) => void;
   toggleLeadSelection: (key: string) => void;
   clearLeadSelection: () => void;
@@ -51,6 +54,8 @@ const initialState = {
   progress: 0,
   total: 0,
   log: "",
+  medicaoColeta: null as MedicaoColeta | null,
+  concluiuComAvisos: false,
   leads: [],
   selectedLeadKeys: [],
   searchParams: null,
@@ -83,6 +88,8 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: 0,
       total: 0,
       log: "Extraindo...",
+      medicaoColeta: null,
+      concluiuComAvisos: false,
       leads: [],
       selectedLeadKeys: [],
     }),
@@ -95,6 +102,8 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: 0,
       total: 0,
       log: "Iniciando releitura...",
+      medicaoColeta: null,
+      concluiuComAvisos: false,
       leads: [],
     }),
   updateStatus: (data) =>
@@ -103,9 +112,22 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: data.progress,
       total: data.total,
       log: data.log,
+      medicaoColeta:
+        typeof data.processados === "number" &&
+        typeof data.coletados === "number" &&
+        typeof data.falhas === "number" &&
+        typeof data.duracaoMs === "number"
+          ? {
+              processados: data.processados,
+              coletados: data.coletados,
+              falhas: data.falhas,
+              duracaoMs: data.duracaoMs,
+            }
+          : null,
+      concluiuComAvisos: data.concluidoComAvisos === true,
       leads: data.leads,
     }),
-  openSavedLeads: (params, leads, historyId) =>
+  openSavedLeads: (params, leads, historyId, concluiuComAvisos = false) =>
     set({
       activeView: "search",
       jobId: historyId ? `history:${historyId}` : null,
@@ -116,6 +138,8 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: leads.length,
       total: leads.length,
       log: `Histórico reaberto com ${leads.length} leads.`,
+      medicaoColeta: null,
+      concluiuComAvisos,
       leads,
       selectedLeadKeys: [],
     }),

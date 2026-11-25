@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BuscaGlobal } from "../features/crm/BuscaGlobal";
-import { History, Menu, Monitor, X, Layers } from "lucide-react";
+import { History, Menu, Monitor, X } from "lucide-react";
 import { NAVEGACAO, type Tela } from "../config/navegacao";
 import { PRODUTO } from "../config/produto";
 import { useAppStore } from "../store";
@@ -9,6 +9,7 @@ import { useConexaoLocal } from "../services/conexao";
 import { APP_TITLE, APP_VERSION } from "../version";
 import { getInitials } from "../utils/initials";
 import { Botao } from "./ui/Botao";
+import { LogoAdapti } from "./ui/LogoAdapti";
 
 export function Layout({
   children,
@@ -78,7 +79,7 @@ export function Layout({
         aria-label="Navegação principal"
       >
         <div className="marca">
-          <Layers size={33} aria-hidden="true" />
+          <LogoAdapti />
           <div>
             <strong>{PRODUTO.organizacao}</strong>
             <span>{PRODUTO.nome}</span>

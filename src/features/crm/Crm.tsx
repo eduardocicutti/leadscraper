@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { QualificacaoLead } from "./QualificacaoLead";
 import { PaginacaoDetalhe } from "./PaginacaoDetalhe";
+import { formatarDataCivil, formatarInstanteCrm } from "./formatarDatasCrm";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -14,18 +15,34 @@ import { Botao } from "../../components/ui/Botao";
 import { useAppStore } from "../../store";
 import {
   consultarCrm,
+  ehAtividade,
+  ehContato,
+  ehDetalheEmpresa,
+  ehEmpresa,
+  empresasCandidatas,
   mensagemErroCrm,
+  rotuloEmpresaCandidata,
   salvarCrm,
+  validarPaginaCrm,
   type Atividade,
   type AtividadeEntrada,
   type Contato,
-  type DetalheEmpresa,
   type Empresa,
+  type EmpresaCandidata,
   type EmpresaEntrada,
-  type PaginaCrm,
 } from "../../services/crm";
+import { urlHttp } from "../../utils/urlHttp";
 
 type Modo = "empresas" | "contatos" | "atividades";
+
+const TIPOS_ATIVIDADE: Record<Atividade["tipo"], string> = {
+  lembrete: "Lembrete",
+  tarefa: "Tarefa",
+  ligacao: "Ligação",
+  whatsapp: "WhatsApp",
+  email: "E-mail",
+  reuniao: "Reunião",
+};
 
 function Campo({
   titulo,
@@ -69,6 +86,7 @@ function FormularioEmpresa({
   cancelar: () => void;
 }) {
   const operador = useAppStore((estado) => estado.prospectador);
+  const abrirEmpresa = useAppStore((estado) => estado.abrirEmpresa);
   const [valores, alterarValores] = useState<EmpresaEntrada>({
     nome: empresa?.nome || "",
     cnpj: empresa?.cnpj || "",
@@ -81,26 +99,35 @@ function FormularioEmpresa({
     telefone: "",
   });
   const [erro, definirErro] = useState("");
+  const [candidatas, definirCandidatas] = useState<EmpresaCandidata[]>([]);
   const [salvando, definirSalvando] = useState(false);
-  async function salvar(evento: FormEvent) {
-    evento.preventDefault();
+  const podeCadastrarSeparadamente =
+    !empresa &&
+    candidatas.length > 0 &&
+    candidatas.every((candidata) => candidata.somenteTelefone);
+  async function salvar(confirmarTelefoneCompartilhado = false) {
     definirErro("");
+    definirCandidatas([]);
     definirSalvando(true);
     try {
-      const resultado = await salvarCrm<Empresa>(
+      const resultado = await salvarCrm(
         empresa ? `empresas/${empresa.id}` : "empresas",
+        ehEmpresa,
         empresa
           ? {
               ...valores,
               version: empresa.version,
-              arquivada: empresa.arquivada,
+              arquivada: Boolean(empresa.arquivada),
             }
-          : valores,
+          : confirmarTelefoneCompartilhado
+            ? { ...valores, confirmarTelefoneCompartilhado }
+            : valores,
         Boolean(empresa),
       );
       concluir(resultado.id);
     } catch (falha) {
       definirErro(mensagemErroCrm(falha));
+      definirCandidatas(empresasCandidatas(falha));
     } finally {
       definirSalvando(false);
     }
@@ -112,19 +139,31 @@ function FormularioEmpresa({
         O cadastro não registra uma abordagem. Telefones ficam vinculados aos
         contatos.
       </p>
-      <form onSubmit={(evento) => void salvar(evento)}>
-        <div className="crm-campos">
+      <form
+        onSubmit={(evento) => {
+          evento.preventDefault();
+          void salvar();
+        }}
+        onChange={() => {
+          if (candidatas.length > 0) {
+            definirCandidatas([]);
+            definirErro("");
+          }
+        }}
+      >
+        <fieldset className="crm-campos min-w-0" disabled={salvando}>
           {(
             [
-              ["nome", "Nome da empresa"],
-              ["cnpj", "CNPJ (opcional)"],
-              ["segmento", "Segmento"],
-              ["cidade", "Cidade"],
-              ["uf", "UF"],
-              ["site", "Site (https://…)"],
-              ["responsavel", "Responsável"],
+              ["nome", "Nome da empresa", 200],
+              ["cnpj", "CNPJ (opcional)", 30],
+              ["segmento", "Segmento", 120],
+              ["cidade", "Cidade", 120],
+              ["uf", "UF", 2],
+              ["site", "Site (https://…)", 1000],
+              ["urlMaps", "URL de origem (Google Maps)", 2000],
+              ["responsavel", "Responsável", 100],
             ] as const
-          ).map(([nome, titulo]) => (
+          ).map(([nome, titulo, limite]) => (
             <Campo
               key={nome}
               titulo={titulo}
@@ -132,7 +171,7 @@ function FormularioEmpresa({
               valor={valores[nome] || ""}
               alterar={(valor) => alterarValores({ ...valores, [nome]: valor })}
               obrigatorio={nome === "nome" || nome === "responsavel"}
-              limite={nome === "uf" ? 2 : 200}
+              limite={limite}
             />
           ))}
           {!empresa && (
@@ -140,15 +179,37 @@ function FormularioEmpresa({
               titulo="Telefone principal"
               nome="telefone"
               tipo="tel"
+              limite={40}
               valor={valores.telefone}
               alterar={(telefone) => alterarValores({ ...valores, telefone })}
             />
           )}
-        </div>
+        </fieldset>
         {erro && (
           <p className="aviso" role="alert">
             {erro}
           </p>
+        )}
+        {candidatas.length > 0 && (
+          <div className="acoes">
+            {candidatas.map((candidata) => (
+              <Botao
+                key={candidata.id}
+                disabled={salvando}
+                onClick={() => {
+                  cancelar();
+                  abrirEmpresa(candidata.id);
+                }}
+              >
+                Abrir {rotuloEmpresaCandidata(candidata)}
+              </Botao>
+            ))}
+            {podeCadastrarSeparadamente && (
+              <Botao carregando={salvando} onClick={() => void salvar(true)}>
+                Cadastrar empresa separadamente
+              </Botao>
+            )}
+          </div>
         )}
         <div className="acoes">
           <Botao type="submit" variante="primario" carregando={salvando}>
@@ -187,6 +248,7 @@ function FormularioContato({
     try {
       await salvarCrm(
         `empresas/${empresaId}/contatos${contato ? `/${contato.id}` : ""}`,
+        ehContato,
         contato ? { ...valores, version: contato.version } : valores,
         Boolean(contato),
       );
@@ -266,6 +328,7 @@ function FormularioAtividade({
     try {
       await salvarCrm(
         `empresas/${empresaId}/atividades${atividade ? `/${atividade.id}` : ""}`,
+        ehAtividade,
         atividade ? { ...valores, version: atividade.version } : valores,
         Boolean(atividade),
       );
@@ -305,25 +368,9 @@ function FormularioAtividade({
               })
             }
           >
-            {[
-              "lembrete",
-              "tarefa",
-              "ligacao",
-              "whatsapp",
-              "email",
-              "reuniao",
-            ].map((tipo) => (
+            {Object.entries(TIPOS_ATIVIDADE).map(([tipo, rotulo]) => (
               <option key={tipo} value={tipo}>
-                {
-                  {
-                    lembrete: "Lembrete",
-                    tarefa: "Tarefa",
-                    ligacao: "Ligação",
-                    whatsapp: "WhatsApp",
-                    email: "E-mail",
-                    reuniao: "Reunião",
-                  }[tipo]
-                }
+                {rotulo}
               </option>
             ))}
           </select>
@@ -412,7 +459,7 @@ function Detalhes({
       paginaEventos,
     ],
     queryFn: () =>
-      consultarCrm<DetalheEmpresa>(`empresas/${empresaId}`, {
+      consultarCrm(`empresas/${empresaId}`, ehDetalheEmpresa, {
         paginaContatos,
         paginaAtividades,
         paginaEventos,
@@ -429,6 +476,8 @@ function Detalhes({
   const [erro, definirErro] = useState("");
   const [arquivando, definirArquivando] = useState(false);
   const empresa = consulta.data;
+  const site = urlHttp(empresa?.site);
+  const urlMaps = urlHttp(empresa?.urlMaps);
   function atualizar() {
     void cliente.invalidateQueries({ queryKey: ["crm"] });
   }
@@ -451,6 +500,7 @@ function Detalhes({
       } = empresa;
       await salvarCrm(
         `empresas/${id}`,
+        ehEmpresa,
         {
           version,
           nome,
@@ -514,10 +564,17 @@ function Detalhes({
                     Responsável: {empresa.responsavel} · CNPJ:{" "}
                     {empresa.cnpj || "não informado"}
                   </p>
-                  {empresa.site && (
-                    <a href={empresa.site} target="_blank" rel="noreferrer">
+                  {site && (
+                    <a href={site} target="_blank" rel="noreferrer">
                       Visitar site
                     </a>
+                  )}
+                  {urlMaps && (
+                    <p>
+                      <a href={urlMaps} target="_blank" rel="noreferrer">
+                        Abrir origem no Maps
+                      </a>
+                    </p>
                   )}
                 </div>
                 <div className="acoes">
@@ -629,9 +686,7 @@ function Detalhes({
                         <strong>{item.titulo}</strong>
                         <span>
                           {item.tipo} · {item.situacao} ·{" "}
-                          {item.prazoData
-                            ? item.prazoData.split("-").reverse().join("/")
-                            : "Sem data"}
+                          {formatarDataCivil(item.prazoData)}
                         </span>
                         <span>{item.resultado}</span>
                         <Botao onClick={() => definirAtividade(item)}>
@@ -663,7 +718,7 @@ function Detalhes({
                     <strong>{evento.descricao}</strong>
                     <span>
                       {evento.autorNome} ·{" "}
-                      {new Date(evento.createdAt).toLocaleString("pt-BR")}
+                      {formatarInstanteCrm(evento.createdAt)}
                     </span>
                   </li>
                 ))}
@@ -689,6 +744,20 @@ export function Crm({ modo }: { modo: Modo }) {
   const [arquivadas, definirArquivadas] = useState(false);
   const [situacao, definirSituacao] = useState("");
   const [prazo, definirPrazo] = useState("");
+  const [qualificacao, definirQualificacao] = useState("");
+  const [responsavel, definirResponsavel] = useState("");
+  const [relacionamento, definirRelacionamento] = useState("");
+  const [tipo, definirTipo] = useState("");
+  const temFiltro = Boolean(
+    termo ||
+      arquivadas ||
+      situacao ||
+      prazo ||
+      qualificacao ||
+      responsavel.trim() ||
+      relacionamento ||
+      tipo,
+  );
   const dataReferencia = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
     year: "numeric",
@@ -718,14 +787,28 @@ export function Crm({ modo }: { modo: Modo }) {
       situacao,
       prazo,
       dataReferencia,
+      qualificacao,
+      responsavel,
+      relacionamento,
+      tipo,
     ],
     queryFn: () =>
-      consultarCrm<PaginaCrm<Empresa | Contato | Atividade>>(modo, {
-        busca: termo,
-        pagina,
-        arquivadas,
-        ...(modo === "atividades" ? { situacao, prazo, dataReferencia } : {}),
-      }),
+      consultarCrm(
+        modo,
+        validarPaginaCrm<Empresa | Contato | Atividade>(
+          modo === "empresas" ? ehEmpresa : modo === "contatos" ? ehContato : ehAtividade,
+        ),
+        {
+          busca: termo,
+          pagina,
+          ...(modo === "empresas"
+            ? { arquivadas, qualificacao, relacionamento, responsavel }
+            : {}),
+          ...(modo === "atividades"
+            ? { situacao, prazo, dataReferencia, tipo, responsavel }
+            : {}),
+        },
+      ),
     enabled: !empresaId,
   });
   if (empresaId)
@@ -797,23 +880,84 @@ export function Crm({ modo }: { modo: Modo }) {
               maxLength={200}
             />
           </label>
+          {modo !== "contatos" && (
+            <Campo
+              titulo="Filtrar responsável"
+              nome="responsavel"
+              valor={responsavel}
+              limite={100}
+              alterar={(valor) => {
+                definirResponsavel(valor);
+                definirPagina(1);
+              }}
+            />
+          )}
           {modo === "empresas" && (
-            <label className="campo">
-              <span>Cadastros</span>
-              <select
-                value={String(arquivadas)}
-                onChange={(evento) => {
-                  definirArquivadas(evento.target.value === "true");
-                  definirPagina(1);
-                }}
-              >
-                <option value="false">Ativos</option>
-                <option value="true">Arquivados</option>
-              </select>
-            </label>
+            <>
+              <label className="campo">
+                <span>Cadastros</span>
+                <select
+                  value={String(arquivadas)}
+                  onChange={(evento) => {
+                    definirArquivadas(evento.target.value === "true");
+                    definirPagina(1);
+                  }}
+                >
+                  <option value="false">Ativos</option>
+                  <option value="true">Arquivados</option>
+                </select>
+              </label>
+              <label className="campo">
+                <span>Filtrar qualificação</span>
+                <select
+                  value={qualificacao}
+                  onChange={(evento) => {
+                    definirQualificacao(evento.target.value);
+                    definirPagina(1);
+                  }}
+                >
+                  <option value="">Todas</option>
+                  <option value="novo">Novo</option>
+                  <option value="analise">Em análise</option>
+                  <option value="qualificado">Qualificado</option>
+                  <option value="desqualificado">Desqualificado</option>
+                </select>
+              </label>
+              <label className="campo">
+                <span>Filtrar relacionamento</span>
+                <select
+                  value={relacionamento}
+                  onChange={(evento) => {
+                    definirRelacionamento(evento.target.value);
+                    definirPagina(1);
+                  }}
+                >
+                  <option value="">Todos</option>
+                  <option value="prospectada">Já prospectadas</option>
+                  <option value="semAbordagem">Sem abordagem</option>
+                </select>
+              </label>
+            </>
           )}
           {modo === "atividades" && (
             <>
+              <label className="campo">
+                <span>Filtrar tipo de atividade</span>
+                <select
+                  value={tipo}
+                  onChange={(evento) => {
+                    definirTipo(evento.target.value);
+                    definirPagina(1);
+                  }}
+                >
+                  <option value="">Todos os tipos</option>
+                  {Object.entries(TIPOS_ATIVIDADE).map(([valor, rotulo]) => (
+                    <option key={valor} value={valor}>
+                      {rotulo}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="campo">
                 <span>Filtrar situação</span>
                 <select
@@ -911,7 +1055,7 @@ export function Crm({ modo }: { modo: Modo }) {
                             ? [item.telefone, item.email]
                                 .filter(Boolean)
                                 .join(" · ") || "—"
-                            : `${item.prazoData?.split("-").reverse().join("/") || "Sem data"} · ${item.situacao}`}
+                            : `${formatarDataCivil(item.prazoData)} · ${item.situacao}`}
                       </td>
                       <td>
                         <Botao
@@ -931,8 +1075,8 @@ export function Crm({ modo }: { modo: Modo }) {
             </div>
             {consulta.data?.total === 0 && (
               <p className="crm-vazio">
-                {termo
-                  ? "Nenhum registro encontrado. Tente outro nome ou telefone."
+                {temFiltro
+                  ? "Nenhum registro encontrado com os filtros selecionados."
                   : "Nenhum registro ainda. Comece pelo cadastro de uma empresa."}
               </p>
             )}

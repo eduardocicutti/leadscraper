@@ -8,9 +8,11 @@ from backend.repositories import database
 
 
 @contextmanager
-def transacao() -> Iterator[Connection]:
+def transacao(*, bloquearEscrita: bool = False) -> Iterator[Connection]:
     database.ensure_db_ready()
     with database.db_lock, database.engine.begin() as conexao:
+        if bloquearEscrita:
+            conexao.exec_driver_sql("BEGIN IMMEDIATE")
         yield conexao
 
 
@@ -39,6 +41,7 @@ def inserir(conexao: Connection, tabela: str, valores: dict) -> None:
         "crm_atividade",
         "crm_evento",
         "crm_origem_selecionada",
+        "crm_origem_historico",
     }
     if tabela not in tabelasPermitidas:
         raise ValueError("Tabela inválida.")

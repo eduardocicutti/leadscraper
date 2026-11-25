@@ -1,9 +1,8 @@
 from typing import Annotated
 from typing import Literal
-from datetime import date
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -14,11 +13,12 @@ from backend.api.crm_schemas import (
     ContatoEdicao,
     ContatoEntrada,
     ConversaoEntrada,
+    DataIso,
     EmpresaEdicao,
     EmpresaEntrada,
     QualificacaoEntrada,
 )
-from backend.domain.crm import ContextoLocal, ErroCrm
+from backend.domain.crm import MAXIMO_INTEIRO_SQLITE, ContextoLocal, ErroCrm
 from backend.services import crm_service as servico
 
 rotas = APIRouter(prefix="/api/v1/crm", tags=["CRM local"])
@@ -35,9 +35,14 @@ def contextoLocal(
 
 
 Contexto = Annotated[ContextoLocal, Depends(contextoLocal)]
-Pagina = Annotated[int, Query(ge=1)]
-Tamanho = Annotated[int, Query(ge=1, le=100)]
+MAXIMO_TAMANHO_PAGINA = 100
+Pagina = Annotated[
+    int, Query(ge=1, le=MAXIMO_INTEIRO_SQLITE // MAXIMO_TAMANHO_PAGINA + 1)
+]
+Tamanho = Annotated[int, Query(ge=1, le=MAXIMO_TAMANHO_PAGINA)]
+IdLegado = Annotated[int, Path(ge=1, le=MAXIMO_INTEIRO_SQLITE)]
 Busca = Annotated[str, Query(max_length=200)]
+Responsavel = Annotated[str, Query(max_length=100)]
 
 
 @rotas.get("/empresas")
@@ -47,8 +52,13 @@ def listarEmpresas(
     pagina: Pagina = 1,
     tamanho: Tamanho = 25,
     arquivadas: bool = False,
+    qualificacao: Literal["", "novo", "analise", "qualificado", "desqualificado"] = "",
+    responsavel: Responsavel = "",
+    relacionamento: Literal["", "prospectada", "semAbordagem"] = "",
 ):
-    return servico.listarEmpresas(busca, pagina, tamanho, arquivadas, contexto)
+    return servico.listarEmpresas(
+        busca, pagina, tamanho, arquivadas, contexto, qualificacao, responsavel, relacionamento
+    )
 
 
 @rotas.get("/busca")
@@ -122,9 +132,23 @@ def listarContatos(
 
 @rotas.post("/selecionados/{selectedId}/converter")
 def converterSelecionado(
-    selectedId: int, entrada: ConversaoEntrada, contexto: Contexto
+    selectedId: IdLegado, entrada: ConversaoEntrada, contexto: Contexto
 ):
-    return servico.converterSelecionado(selectedId, entrada.empresaId, contexto)
+    return servico.converterSelecionado(
+        selectedId, entrada.empresaId, contexto, entrada.confirmarTelefoneCompartilhado
+    )
+
+
+@rotas.post("/historico/{historicoId}/leads/{leadId}/converter")
+def converterLeadHistorico(
+    historicoId: IdLegado,
+    leadId: IdLegado,
+    entrada: ConversaoEntrada,
+    contexto: Contexto,
+):
+    return servico.converterLeadHistorico(
+        historicoId, leadId, entrada.empresaId, contexto, entrada.confirmarTelefoneCompartilhado
+    )
 
 
 @rotas.get("/atividades")
@@ -135,10 +159,13 @@ def listarAtividades(
     tamanho: Tamanho = 25,
     situacao: Literal["", "pendente", "concluida", "cancelada"] = "",
     prazo: Literal["", "vencidos", "hoje", "proximos", "semData"] = "",
-    dataReferencia: date | None = None,
+    dataReferencia: DataIso | None = None,
+    tipo: Literal["", "ligacao", "whatsapp", "email", "reuniao", "tarefa", "lembrete"] = "",
+    responsavel: Responsavel = "",
 ):
     return servico.listarRelacionados(
-        "atividades", busca, pagina, tamanho, contexto, situacao, prazo, dataReferencia
+        "atividades", busca, pagina, tamanho, contexto, situacao, prazo, dataReferencia,
+        tipo, responsavel,
     )
 
 
@@ -160,7 +187,7 @@ def configurarCrm(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def responderValidacao(pedido: Request, erro: RequestValidationError):
-        if not pedido.url.path.startswith("/api/v1/crm"):
+        if not pedido.url.path.startswith("/api/v1/"):
             return await request_validation_exception_handler(pedido, erro)
         return JSONResponse(
             status_code=422,

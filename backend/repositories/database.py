@@ -3,16 +3,20 @@ import shutil
 import sqlite3
 import threading
 import traceback
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from difflib import SequenceMatcher
+from tempfile import TemporaryDirectory
 from unicodedata import combining, normalize
+from uuid import uuid4
 
-from sqlalchemy import event, or_, text
+from sqlalchemy import Engine, event, inspect, or_, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from backend.core.logging import logger
-from backend.repositories.migracoes import aplicarMigracoes
+from backend.repositories.migracoes import MIGRACOES, aplicarMigracoes, lerMigracao
 from backend.domain.models import AppSetting, Lead, SearchHistory, SelectedLead
 from backend.domain.whatsapp import (
     DEFAULT_MESSAGE_TEMPLATE,
@@ -20,7 +24,7 @@ from backend.domain.whatsapp import (
     phone_digits,
 )
 
-engine = None
+engine: Engine | None = None
 db_file_path: Path | None = None
 db_lock = threading.Lock()
 MESSAGE_TEMPLATE_KEY = "selected_lead_message_template"
@@ -31,17 +35,10 @@ def init_db(db_path: str) -> None:
     global engine, db_file_path
     try:
         resolved_path = Path(db_path).expanduser().resolve()
-        db_file_path = resolved_path
         resolved_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info("Opening database at %s", resolved_path)
-        aplicarMigracoes(resolved_path)
-        engine = create_engine(
-            f"sqlite:///{resolved_path}",
-            connect_args={"check_same_thread": False},
-        )
-        event.listen(engine, "connect", _configure_sqlite_connection)
-        SQLModel.metadata.create_all(engine)
-        _migrate_schema()
+        engine = prepararBanco(resolved_path)
+        db_file_path = resolved_path
         logger.info("Database initialized at %s", resolved_path)
     except Exception:
         logger.exception("Failed to initialize database at %s", db_path)
@@ -49,11 +46,27 @@ def init_db(db_path: str) -> None:
         raise
 
 
+def prepararBanco(caminho: Path) -> Engine:
+    aplicarMigracoes(caminho)
+    novoBanco = create_engine(
+        f"sqlite:///{caminho}", connect_args={"check_same_thread": False}
+    )
+    try:
+        event.listen(novoBanco, "connect", _configure_sqlite_connection)
+        SQLModel.metadata.create_all(novoBanco)
+        _migrate_schema(novoBanco)
+    except Exception:
+        novoBanco.dispose()
+        raise
+    return novoBanco
+
+
 def _configure_sqlite_connection(dbapi_connection, _connection_record) -> None:
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA synchronous=FULL")
     cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA trusted_schema=OFF")
     cursor.execute("PRAGMA busy_timeout=5000")
     cursor.close()
 
@@ -78,9 +91,7 @@ def _checkpoint_wal_truncate() -> None:
         logger.debug("Could not truncate SQLite WAL", exc_info=True)
 
 
-def _migrate_schema() -> None:
-    if engine is None:
-        return
+def _migrate_schema(banco: Engine) -> None:
     migrations = [
         ("selectedlead", "source_history_id", "INTEGER"),
         ("selectedlead", "source_lead_id", "INTEGER"),
@@ -107,29 +118,26 @@ def _migrate_schema() -> None:
         ("selectedlead", "selected_at", "DATETIME"),
         ("selectedlead", "updated_at", "DATETIME"),
     ]
-    with engine.connect() as conn:
+    with banco.begin() as conn:
+        colunasExistentes = {
+            coluna["name"] for coluna in inspect(conn).get_columns("selectedlead")
+        }
         for table, column, col_type in migrations:
-            try:
+            if column not in colunasExistentes:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
-                conn.commit()
-            except Exception:
-                pass
-        try:
-            conn.execute(
-                text(
-                    """
-                    UPDATE selectedlead
-                    SET
-                        notes = COALESCE(notes, ''),
-                        custom_message = COALESCE(custom_message, ''),
-                        selected_at = COALESCE(selected_at, CURRENT_TIMESTAMP),
-                        updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
-                    """
-                )
+        conn.execute(
+            text(
+                """
+                UPDATE selectedlead
+                SET
+                    notes = COALESCE(notes, ''),
+                    custom_message = COALESCE(custom_message, ''),
+                    selected_at = COALESCE(selected_at, CURRENT_TIMESTAMP),
+                    updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+                WHERE notes IS NULL OR custom_message IS NULL OR selected_at IS NULL OR updated_at IS NULL
+                """
             )
-            conn.commit()
-        except Exception:
-            pass
+        )
 
 
 def _whatsapp_link_for(record: SelectedLead, template: str) -> str:
@@ -191,7 +199,9 @@ def _matches_selected_filters(lead: SelectedLead, filters: dict | None) -> bool:
 
 def ensure_db_ready() -> None:
     if engine is None:
-        init_db(os.getenv("DB_PATH", "banco.db"))
+        with db_lock:
+            if engine is None:
+                init_db(os.getenv("DB_PATH", "banco.db"))
 
 
 def is_db_ready() -> bool:
@@ -211,55 +221,112 @@ def create_backup_bytes() -> tuple[bytes, str]:
     if db_file_path is None:
         raise RuntimeError("Database path is not configured")
 
-    with db_lock:
-        _checkpoint_wal_truncate()
-        content = db_file_path.read_bytes()
+    with TemporaryDirectory(dir=db_file_path.parent, prefix=".backup-") as pasta:
+        destino = Path(pasta) / "backup.db"
+        with db_lock:
+            copiarBanco(db_file_path, destino)
+        content = destino.read_bytes()
 
     filename = f"lead-scraper-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.db"
     return content, filename
 
 
+def copiarBanco(origem: Path, destino: Path) -> None:
+    with (
+        closing(sqlite3.connect(f"{origem.as_uri()}?mode=ro", uri=True)) as leitura,
+        closing(sqlite3.connect(destino)) as copia,
+    ):
+        leitura.backup(copia)
+
+
+def validarBancoDeRestore(caminho: Path) -> None:
+    with closing(sqlite3.connect(f"{caminho.as_uri()}?mode=ro", uri=True)) as conexao:
+        conexao.execute("PRAGMA trusted_schema=OFF")
+        if conexao.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+            raise ValueError("Arquivo de backup corrompido.")
+        esquema = conexao.execute(
+            "SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view', 'trigger')"
+        ).fetchall()
+        tabelas = {nome for nome, tipo in esquema if tipo == "table"}
+        if not {"searchhistory", "lead"} <= tabelas or any(
+            tipo != "table" for _, tipo in esquema
+        ):
+            raise ValueError("O arquivo não tem um esquema de backup do LeadScraper.")
+
+
+def validarEsquemaPreparado(banco: Engine) -> None:
+    colunas = inspect(banco)
+    esperadas = {
+        tabela.name: set(tabela.columns.keys())
+        for tabela in SQLModel.metadata.sorted_tables
+    }
+    with closing(sqlite3.connect(":memory:")) as referencia:
+        for arquivo in MIGRACOES:
+            referencia.executescript(lerMigracao(arquivo))
+        tabelasCrm = referencia.execute(
+            "SELECT name FROM sqlite_schema WHERE type='table'"
+        ).fetchall()
+        for (tabela,) in tabelasCrm:
+            esperadas[tabela] = {
+                nome for (nome,) in referencia.execute(
+                    "SELECT name FROM pragma_table_info(?)", (tabela,)
+                )
+            }
+    existentes = set(colunas.get_table_names())
+    if not esperadas.keys() <= existentes:
+        raise ValueError("O backup está incompleto ou é incompatível.")
+    for tabela, campos in esperadas.items():
+        if not campos <= {coluna["name"] for coluna in colunas.get_columns(tabela)}:
+            raise ValueError("O backup está incompleto ou é incompatível.")
+
+
 def restore_backup_bytes(content: bytes, filename: str = "backup.db") -> dict:
-    global engine
     ensure_db_ready()
     if db_file_path is None:
         raise RuntimeError("Database path is not configured")
-    if not content:
-        raise ValueError("Arquivo de backup vazio.")
+    if not content.startswith(b"SQLite format 3\x00"):
+        raise ValueError("Arquivo de backup inválido ou corrompido.")
 
     target_path = db_file_path
     restore_dir = target_path.parent
-    restore_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    temp_path = restore_dir / f".restore-{timestamp}.db"
-    previous_path = restore_dir / f"banco-before-restore-{timestamp}.db"
-
-    temp_path.write_bytes(content)
-    conn = None
-    try:
-        conn = sqlite3.connect(temp_path)
+    identificador = uuid4().hex
+    previous_path = restore_dir / f"banco-before-restore-{identificador}.db"
+    with TemporaryDirectory(dir=restore_dir, prefix=".restore-") as pasta:
+        temp_path = Path(pasta) / "candidato.db"
+        preparado = Path(pasta) / "ativacao.db"
+        temp_path.write_bytes(content)
         try:
-            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
-        finally:
-            conn.close()
-        if integrity != "ok":
-            temp_path.unlink(missing_ok=True)
-            raise ValueError(f"Backup invÃ¡lido: integrity_check={integrity}")
-    except sqlite3.DatabaseError as exc:
-        temp_path.unlink(missing_ok=True)
-        raise ValueError("Arquivo de backup invÃ¡lido ou corrompido.") from exc
+            validarBancoDeRestore(temp_path)
+            candidato = prepararBanco(temp_path)
+            try:
+                validarEsquemaPreparado(candidato)
+            finally:
+                candidato.dispose()
+            copiarBanco(temp_path, preparado)
+        except (sqlite3.DatabaseError, SQLAlchemyError) as erro:
+            raise ValueError("Arquivo de backup inválido ou incompatível.") from erro
 
-    with db_lock:
-        close_db()
-        for suffix in ("-wal", "-shm"):
-            Path(f"{target_path}{suffix}").unlink(missing_ok=True)
-        if target_path.exists():
-            shutil.copy2(target_path, previous_path)
-        shutil.copy2(temp_path, target_path)
-        temp_path.unlink(missing_ok=True)
-        init_db(str(target_path))
+        with db_lock:
+            copiarBanco(target_path, previous_path)
+            close_db()
+            substituido = False
+            try:
+                for suffix in ("-wal", "-shm"):
+                    Path(f"{target_path}{suffix}").unlink(missing_ok=True)
+                os.replace(preparado, target_path)
+                substituido = True
+                init_db(str(target_path))
+            except Exception:
+                if substituido:
+                    reversao = Path(pasta) / "reversao.db"
+                    shutil.copy2(previous_path, reversao)
+                    for suffix in ("-wal", "-shm"):
+                        Path(f"{target_path}{suffix}").unlink(missing_ok=True)
+                    os.replace(reversao, target_path)
+                init_db(str(target_path))
+                raise
 
-    logger.info("Database restored from backup filename=%s path=%s", filename, target_path)
+    logger.info("Database restored from backup filename=%r path=%s", filename, target_path)
     return {
         "ok": True,
         "db_path": str(target_path),
@@ -271,6 +338,8 @@ def lead_to_dict(lead: Lead, history: SearchHistory) -> dict:
     return {
         "id": lead.id,
         "history_id": history.id,
+        "source": "google_maps",
+        "runId": history.id,
         "nome": lead.company_name,
         "categoria": lead.category or history.keyword,
         "nota": lead.rating,
@@ -411,7 +480,7 @@ def save_lead_incremental(history_id: int, lead: dict) -> int | None:
                 duplicate_checks = []
                 if maps_url:
                     duplicate_checks.append(Lead.maps_url == maps_url)
-                if normalized_phone:
+                elif normalized_phone:
                     duplicate_checks.append(Lead.phone.like(f"%{normalized_phone[-8:]}%"))
                 existing = None
                 if duplicate_checks:
@@ -697,11 +766,24 @@ def _existing_selected(
     return session.exec(select(SelectedLead).where(or_(*clauses))).first()
 
 
+def novoLeadSelecionado(session: Session, nome: str) -> SelectedLead:
+    session.flush()
+    # preserva ids ainda referenciados pelo crm depois da exclusão na lista
+    proximoId = session.execute(
+        text("""SELECT max(
+            COALESCE((SELECT max(id) FROM selectedlead), 0),
+            COALESCE((SELECT max(selectedId) FROM crm_origem_selecionada), 0)
+        ) + 1""")
+    ).scalar_one()
+    return SelectedLead(id=proximoId, company_name=nome)
+
+
 def add_selected_leads(leads: list[dict]) -> list[dict]:
     ensure_db_ready()
     saved: list[SelectedLead] = []
     with db_lock:
         with Session(engine) as session:
+            session.execute(text("BEGIN IMMEDIATE"))
             for item in leads:
                 normalized_phone = phone_digits(item.get("telefone")) or None
                 maps_url = item.get("url_maps") or None
@@ -713,7 +795,7 @@ def add_selected_leads(leads: list[dict]) -> list[dict]:
                     item.get("cidade"),
                 )
                 if record is None:
-                    record = SelectedLead(company_name=item.get("nome") or "")
+                    record = novoLeadSelecionado(session, item.get("nome") or "")
 
                 record.source_history_id = item.get("history_id") or item.get("source_history_id")
                 record.source_lead_id = item.get("id") or item.get("source_lead_id")
@@ -754,6 +836,7 @@ def import_selected_leads(leads: list[dict]) -> dict:
     skipped: list[dict] = []
     with db_lock:
         with Session(engine) as session:
+            session.execute(text("BEGIN IMMEDIATE"))
             existing_records = session.exec(select(SelectedLead)).all()
             for index, item in enumerate(leads, start=1):
                 name = (item.get("nome") or "").strip()
@@ -781,7 +864,7 @@ def import_selected_leads(leads: list[dict]) -> dict:
                     continue
 
                 normalized_phone = phone_digits(item.get("telefone")) or None
-                record = SelectedLead(company_name=name)
+                record = novoLeadSelecionado(session, name)
                 record.phone = item.get("telefone")
                 record.normalized_phone = normalized_phone
                 record.is_whatsapp = bool(item.get("is_whatsapp"))

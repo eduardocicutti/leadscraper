@@ -94,10 +94,12 @@ O instalador `.exe` é gerado em `src-tauri/target/release/bundle/`.
 ## Como usar
 
 1. Selecione o **prospectador** no formulário (as iniciais aparecem no avatar da sidebar).
-2. Informe **segmento**, **cidade**, **estado** e **quantidade** de leads.
-3. Clique em **Iniciar extração** e acompanhe o progresso na barra de status.
+2. Escolha a **UF** pelo mapa ou pela lista e busque o **município** por nome ou código IBGE. Informe o segmento e a quantidade de leads.
+3. Revise os parâmetros e confirme a extração. A barra de status informa o andamento. Quando houver falha parcial, os resultados disponíveis continuam acessíveis.
 4. Ao concluir, revise a tabela, marque leads com **checkbox** e clique em **Salvar selecionados** para a Lista Preferencial.
 5. Exporte a busca atual com **Exportar .xlsx**.
+
+Consulte os contratos e a origem dos dados na [documentação da fase 3](docs/implementacao-fase-3.md).
 
 ### Menu lateral
 
@@ -204,7 +206,7 @@ lead_scraper/
 
 ### CRM local em desenvolvimento
 
-O primeiro incremento da fase 2 adiciona empresas, contatos, atividades e lembretes persistentes, com histórico e inclusão de leads no CRM. Configuração da prévia isolada, contratos, testes e limitações: [implementação da fase 2](docs/implementacao-fase-2.md). O backend deve ser atualizado junto da interface; o sidecar instalado anterior não possui essas rotas. Ainda não há autenticação nem sincronização remota.
+O CRM local reúne empresas, contatos, qualificação, atividades e lembretes persistentes. É possível incluir leads da Lista Preferencial e de resultados de prospecção já gravados, consultar a linha do tempo e filtrar empresas pelo relacionamento registrado. O backend e a interface devem ser atualizados juntos para usar as rotas da fase 2. A configuração da prévia isolada, os contratos e as limitações estão na [documentação da fase 2](docs/implementacao-fase-2.md). Autenticação e sincronização remota estão previstas para fases posteriores.
 
 **Backend não responde**  
 Confirme que `python main.py` está rodando e que a porta 8000 está livre.

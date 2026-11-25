@@ -1,72 +1,114 @@
-import axios from "axios";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Botao } from "../../components/ui/Botao";
-import { mensagemErroCrm, salvarCrm } from "../../services/crm";
+import {
+  ehConversao,
+  empresasCandidatas,
+  mensagemErroCrm,
+  rotuloEmpresaCandidata,
+  salvarCrm,
+  type EmpresaCandidata,
+} from "../../services/crm";
+import { useAppStore } from "../../store";
+import { idLegadoValido } from "../../utils/idLegadoValido";
 
-export function ConverterLead({ leadId }: { leadId: number }) {
+export function ConverterLead({
+  leadId,
+  historicoId,
+}: {
+  leadId: number;
+  historicoId?: number;
+}) {
   const cliente = useQueryClient();
-  const [salvando, definirSalvando] = useState(false);
-  const [concluido, definirConcluido] = useState(false);
+  const abrirEmpresa = useAppStore((estado) => estado.abrirEmpresa);
+  const [estaSalvando, definirEstaSalvando] = useState(false);
+  const [empresaVinculadaId, definirEmpresaVinculadaId] = useState<string | null>(
+    null,
+  );
   const [erro, definirErro] = useState("");
-  const [candidatas, definirCandidatas] = useState<
-    { id: string; nome: string }[]
-  >([]);
-  async function converter(empresaId?: string) {
-    definirSalvando(true);
+  const [candidatas, definirCandidatas] = useState<EmpresaCandidata[]>([]);
+  const podeCadastrarSeparadamente =
+    candidatas.length > 0 &&
+    candidatas.every((candidata) => candidata.somenteTelefone);
+  async function converter(
+    empresaId?: string,
+    confirmarTelefoneCompartilhado = false,
+  ) {
+    if (!idLegadoValido(leadId) || (historicoId !== undefined && !idLegadoValido(historicoId))) {
+      definirErro("Não foi possível identificar o lead. Recarregue a lista.");
+      return;
+    }
+    definirEstaSalvando(true);
     definirErro("");
     try {
-      await salvarCrm(`selecionados/${leadId}/converter`, { empresaId });
-      definirConcluido(true);
+      const caminho = historicoId
+        ? `historico/${historicoId}/leads/${leadId}/converter`
+        : `selecionados/${leadId}/converter`;
+      const resposta = await salvarCrm(caminho, ehConversao, {
+        empresaId,
+        ...(confirmarTelefoneCompartilhado ? { confirmarTelefoneCompartilhado } : {}),
+      });
+      definirEmpresaVinculadaId(resposta.empresaId);
       definirCandidatas([]);
       void cliente.invalidateQueries({ queryKey: ["crm"] });
     } catch (falha) {
       definirErro(mensagemErroCrm(falha));
-      if (axios.isAxiosError(falha)) {
-        const resposta: unknown = falha.response?.data;
-        if (
-          typeof resposta === "object" &&
-          resposta !== null &&
-          "candidatas" in resposta &&
-          Array.isArray(resposta.candidatas)
-        ) {
-          definirCandidatas(
-            resposta.candidatas.flatMap((item: unknown) =>
-              typeof item === "object" &&
-              item !== null &&
-              "id" in item &&
-              typeof item.id === "string" &&
-              "nome" in item &&
-              typeof item.nome === "string"
-                ? [{ id: item.id, nome: item.nome }]
-                : [],
-            ),
-          );
-        }
-      }
+      const novasCandidatas = empresasCandidatas(falha);
+      if ((!empresaId && !confirmarTelefoneCompartilhado) || novasCandidatas.length > 0)
+        definirCandidatas(novasCandidatas);
     } finally {
-      definirSalvando(false);
+      definirEstaSalvando(false);
     }
   }
+  if (empresaVinculadaId)
+    return (
+      <div>
+        <p role="status">Empresa vinculada ao CRM.</p>
+        <Botao onClick={() => abrirEmpresa(empresaVinculadaId)}>
+          Abrir empresa no CRM
+        </Botao>
+      </div>
+    );
+
   return (
-    <div>
+    <div className="whitespace-normal">
       <Botao
-        carregando={salvando}
-        disabled={concluido}
+        carregando={estaSalvando}
+        disabled={candidatas.length > 0}
         onClick={() => void converter()}
       >
-        {concluido ? "No CRM" : "Adicionar ao CRM"}
+        Adicionar ao CRM
       </Botao>
       {erro && <p role="alert">{erro}</p>}
       {candidatas.map((empresa) => (
         <Botao
           key={empresa.id}
-          carregando={salvando}
+          disabled={estaSalvando}
           onClick={() => void converter(empresa.id)}
         >
-          Vincular a {empresa.nome}
+          Vincular a {rotuloEmpresaCandidata(empresa)}
         </Botao>
       ))}
+      {podeCadastrarSeparadamente && (
+        <Botao
+          disabled={estaSalvando}
+          onClick={() => void converter(undefined, true)}
+        >
+          Cadastrar empresa separadamente
+        </Botao>
+      )}
+      {candidatas.length > 0 && (
+        <Botao
+          variante="discreto"
+          disabled={estaSalvando}
+          onClick={() => {
+            definirCandidatas([]);
+            definirErro("");
+          }}
+        >
+          Cancelar vínculo
+        </Botao>
+      )}
     </div>
   );
 }

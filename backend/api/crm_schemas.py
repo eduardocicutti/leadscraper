@@ -1,10 +1,30 @@
 import re
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictBool,
+    field_validator,
+    model_validator,
+)
 
-from backend.domain.crm import normalizarTelefone, validarCnpj
+from backend.domain.crm import MAXIMO_INTEIRO_SQLITE, normalizarTelefone, validarCnpj
+
+
+def validarDataIso(valor: object) -> str | date:
+    if type(valor) is date:
+        return valor
+    if isinstance(valor, str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", valor):
+        return valor
+    raise ValueError("Informe a data no formato AAAA-MM-DD.")
+
+
+DataIso = Annotated[date, BeforeValidator(validarDataIso)]
+VersaoEditavel = Annotated[int, Field(ge=1, le=MAXIMO_INTEIRO_SQLITE - 1, strict=True)]
 
 
 class EntradaCrm(BaseModel):
@@ -19,6 +39,7 @@ class EmpresaEntrada(EntradaCrm):
     uf: str = ""
     site: str = Field(default="", max_length=1000)
     telefone: str = Field(default="", max_length=40)
+    confirmarTelefoneCompartilhado: StrictBool = False
     urlMaps: str = Field(default="", max_length=2000)
     responsavel: str = Field(min_length=1, max_length=100)
 
@@ -58,8 +79,8 @@ class EmpresaEntrada(EntradaCrm):
 
 
 class EmpresaEdicao(EmpresaEntrada):
-    version: int = Field(ge=1, strict=True)
-    arquivada: bool = False
+    version: VersaoEditavel
+    arquivada: StrictBool = False
 
 
 class ContatoEntrada(EntradaCrm):
@@ -83,7 +104,7 @@ class ContatoEntrada(EntradaCrm):
 
 
 class ContatoEdicao(ContatoEntrada):
-    version: int = Field(ge=1, strict=True)
+    version: VersaoEditavel
 
 
 class AtividadeEntrada(EntradaCrm):
@@ -95,7 +116,7 @@ class AtividadeEntrada(EntradaCrm):
     descricao: str = Field(default="", max_length=4000)
     resultado: str = Field(default="", max_length=2000)
     responsavel: str = Field(min_length=1, max_length=100)
-    prazoData: date | None = None
+    prazoData: DataIso | None = None
 
     @model_validator(mode="after")
     def conferirResultado(self):
@@ -105,13 +126,13 @@ class AtividadeEntrada(EntradaCrm):
 
 
 class AtividadeEdicao(AtividadeEntrada):
-    version: int = Field(ge=1, strict=True)
+    version: VersaoEditavel
 
 
 class QualificacaoEntrada(EntradaCrm):
     situacao: Literal["novo", "analise", "qualificado", "desqualificado"]
     motivo: str = Field(default="", max_length=1000)
-    version: int = Field(ge=1, strict=True)
+    version: VersaoEditavel
 
     @model_validator(mode="after")
     def conferirMotivo(self):
@@ -121,4 +142,5 @@ class QualificacaoEntrada(EntradaCrm):
 
 
 class ConversaoEntrada(EntradaCrm):
-    empresaId: str | None = None
+    empresaId: str | None = Field(default=None, min_length=1, max_length=64)
+    confirmarTelefoneCompartilhado: StrictBool = False

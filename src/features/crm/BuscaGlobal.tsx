@@ -3,11 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { NAVEGACAO, type Tela } from "../../config/navegacao";
 import { useAppStore } from "../../store";
+import { formatarInstanteCrm } from "./formatarDatasCrm";
 import {
   consultarCrm,
+  ehEmpresa,
   mensagemErroCrm,
-  type Empresa,
-  type PaginaCrm,
+  validarPaginaCrm,
 } from "../../services/crm";
 
 export function BuscaGlobal({ navegar }: { navegar: (tela: Tela) => void }) {
@@ -47,7 +48,7 @@ export function BuscaGlobal({ navegar }: { navegar: (tela: Tela) => void }) {
   const consulta = useQuery({
     queryKey: ["crm", "busca-global", termo, pagina],
     queryFn: () =>
-      consultarCrm<PaginaCrm<Empresa>>("busca", { busca: termo, pagina }),
+      consultarCrm("busca", validarPaginaCrm(ehEmpresa), { busca: termo, pagina }),
     enabled: termo.length >= 2 && busca.trim() === termo,
     retry: false,
   });
@@ -135,12 +136,7 @@ export function BuscaGlobal({ navegar }: { navegar: (tela: Tela) => void }) {
                     </small>
                     <small>
                       Último contato:{" "}
-                      {empresa.ultimoContatoEm
-                        ? new Date(empresa.ultimoContatoEm).toLocaleString(
-                            "pt-BR",
-                            { timeZone: "America/Sao_Paulo" },
-                          )
-                        : "Não registrado"}
+                      {formatarInstanteCrm(empresa.ultimoContatoEm)}
                     </small>
                   </span>
                 </button>

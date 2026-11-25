@@ -63,7 +63,9 @@ def registrarEvento(
 
 
 def dadosEmpresa(entrada: EmpresaEntrada) -> dict:
-    valores = entrada.model_dump(exclude={"telefone", "version"})
+    valores = entrada.model_dump(
+        exclude={"telefone", "version", "confirmarTelefoneCompartilhado"}
+    )
     return {
         **valores,
         "cnpj": entrada.cnpj or None,
@@ -73,22 +75,45 @@ def dadosEmpresa(entrada: EmpresaEntrada) -> dict:
 
 
 def conferirDuplicidade(
-    conexao: Connection, valores: dict, contexto: ContextoLocal, empresaId: str = ""
+    conexao: Connection,
+    valores: dict,
+    contexto: ContextoLocal,
+    empresaId: str = "",
+    telefone: str = "",
+    confirmarTelefoneCompartilhado: bool = False,
 ) -> None:
     candidatas = repositorio.consultar(
         conexao,
-        """SELECT id,nome,cidade,uf FROM crm_empresa
-        WHERE organizationId=:org AND id<>:id AND
-        ((:cnpj IS NOT NULL AND cnpj=:cnpj) OR (:urlMaps<>'' AND urlMaps=:urlMaps)
-        OR (nomeNormalizado=:nomeNormalizado AND cidadeNormalizada=:cidadeNormalizada AND uf=:uf))""",
-        {**valores, "org": contexto.organizationId, "id": empresaId},
+        """WITH candidatas AS (
+            SELECT e.id,e.nome,e.nomeNormalizado,e.cidade,e.uf,
+                ((:cnpj IS NOT NULL AND e.cnpj IS :cnpj)
+                OR (:urlMaps<>'' AND e.urlMaps=:urlMaps)
+                OR (e.nomeNormalizado=:nomeNormalizado AND :cidadeNormalizada<>''
+                    AND e.cidadeNormalizada=:cidadeNormalizada AND e.uf=:uf)) AS outrosCampos,
+                (:telefone<>'' AND EXISTS (
+                    SELECT 1 FROM crm_contato c WHERE c.organizationId=:org
+                    AND c.empresaId=e.id AND c.telefoneNormalizado=:telefone
+                )) AS mesmoTelefone
+            FROM crm_empresa e WHERE e.organizationId=:org AND e.id<>:id
+        )
+        SELECT id,nome,cidade,uf,NOT outrosCampos AS somenteTelefone FROM candidatas
+        WHERE outrosCampos OR mesmoTelefone ORDER BY nomeNormalizado,id""",
+        {
+            **valores,
+            "org": contexto.organizationId,
+            "id": empresaId,
+            "telefone": "" if confirmarTelefoneCompartilhado else normalizarTelefone(telefone),
+        },
     )
     if candidatas:
         raise ErroCrm(
             "Possível cadastro duplicado. Confira as empresas existentes antes de continuar.",
             "EMPRESA_DUPLICADA",
             409,
-            candidatas,
+            [
+                {**candidata, "somenteTelefone": bool(candidata["somenteTelefone"])}
+                for candidata in candidatas
+            ],
         )
 
 
@@ -116,7 +141,10 @@ def adicionarEmpresa(
     conexao: Connection, entrada: EmpresaEntrada, contexto: ContextoLocal
 ) -> dict:
     valores = {**dadosEmpresa(entrada), **metadados(contexto), "arquivada": False}
-    conferirDuplicidade(conexao, valores, contexto)
+    conferirDuplicidade(
+        conexao, valores, contexto, telefone=entrada.telefone,
+        confirmarTelefoneCompartilhado=entrada.confirmarTelefoneCompartilhado,
+    )
     repositorio.inserir(conexao, "crm_empresa", valores)
     registrarEvento(
         conexao,
@@ -183,10 +211,15 @@ def listarEmpresas(
     tamanho: int,
     arquivadas: bool | None,
     contexto: ContextoLocal,
+    qualificacao: str = "",
+    responsavel: str = "",
+    relacionamento: str = "",
 ) -> dict:
     termo = normalizarTexto(busca)
     digitos = re.sub(r"\D", "", busca)
-    if digitos and len(digitos) in (10, 11, 12, 13):
+    if len(digitos) in (10, 11) or (
+        len(digitos) in (12, 13) and digitos.startswith("55")
+    ):
         digitos = normalizarTelefone(busca)
     parametros = {
         "org": contexto.organizationId,
@@ -194,14 +227,26 @@ def listarEmpresas(
         "telefone": f"%{digitos}%",
         "temTelefone": bool(digitos),
         "arquivadas": arquivadas,
+        "qualificacao": qualificacao,
+        "responsavel": f"%{responsavel.strip()}%",
         "limite": tamanho,
         "inicio": (pagina - 1) * tamanho,
     }
     filtro = """e.organizationId=:org AND (:arquivadas IS NULL OR e.arquivada=:arquivadas) AND
+        e.responsavel LIKE :responsavel AND
+        (:qualificacao='' OR EXISTS (SELECT 1 FROM crm_lead l WHERE l.empresaId=e.id
+        AND l.organizationId=:org AND l.situacao=:qualificacao)) AND
         (e.nomeNormalizado LIKE :busca OR e.cidadeNormalizada LIKE :busca OR
         (:temTelefone AND e.cnpj LIKE :telefone) OR
         EXISTS (SELECT 1 FROM crm_contato c WHERE c.empresaId=e.id AND c.organizationId=:org
         AND (c.nomeNormalizado LIKE :busca OR (:temTelefone AND c.telefoneNormalizado LIKE :telefone))))"""
+    contatoConcluido = """FROM crm_atividade a WHERE a.empresaId=e.id
+        AND a.organizationId=:org AND a.concluidaEm IS NOT NULL
+        AND a.situacao='concluida' AND a.tipo IN ('ligacao','whatsapp','email','reuniao')"""
+    if relacionamento == "prospectada":
+        filtro += f" AND EXISTS (SELECT 1 {contatoConcluido})"
+    elif relacionamento == "semAbordagem":
+        filtro += f" AND NOT EXISTS (SELECT 1 {contatoConcluido})"
     with repositorio.transacao() as conexao:
         total = repositorio.consultar(
             conexao,
@@ -212,7 +257,7 @@ def listarEmpresas(
             conexao,
             f"""SELECT e.*,
             (SELECT situacao FROM crm_lead l WHERE l.empresaId=e.id AND l.organizationId=:org) AS qualificacaoSituacao,
-            (SELECT MAX(a.concluidaEm) FROM crm_atividade a WHERE a.empresaId=e.id AND a.organizationId=:org AND a.situacao='concluida' AND a.tipo IN ('ligacao','whatsapp','email','reuniao')) AS ultimoContatoEm
+            (SELECT MAX(a.concluidaEm) {contatoConcluido}) AS ultimoContatoEm
             FROM crm_empresa e WHERE {filtro} ORDER BY e.nomeNormalizado,e.id LIMIT :limite OFFSET :inicio""",
             parametros,
         )
@@ -431,6 +476,8 @@ def listarRelacionados(
     situacao: str = "",
     prazo: str = "",
     dataReferencia: date | None = None,
+    tipoAtividade: str = "",
+    responsavel: str = "",
 ) -> dict:
     tabela = "crm_contato" if tipo == "contatos" else "crm_atividade"
     campo = "r.nomeNormalizado" if tipo == "contatos" else "r.titulo"
@@ -443,12 +490,20 @@ def listarRelacionados(
     filtroTelefone = ""
     if tipo == "contatos":
         digitos = re.sub(r"\D", "", busca)
-        if len(digitos) in (10, 11, 12, 13):
+        if len(digitos) in (10, 11) or (
+            len(digitos) in (12, 13) and digitos.startswith("55")
+        ):
             digitos = normalizarTelefone(busca)
         parametros.update({"telefone": f"%{digitos}%", "temTelefone": bool(digitos)})
         filtroTelefone = " OR (:temTelefone AND r.telefoneNormalizado LIKE :telefone)"
     filtro = f"r.organizationId=:org AND e.organizationId=:org AND ({campo} LIKE :busca OR e.nomeNormalizado LIKE :busca{filtroTelefone})"
     if tipo == "atividades":
+        if tipoAtividade:
+            filtro += " AND r.tipo=:tipo"
+            parametros["tipo"] = tipoAtividade
+        if responsavel:
+            filtro += " AND r.responsavel LIKE :responsavel"
+            parametros["responsavel"] = f"%{responsavel.strip()}%"
         if situacao:
             filtro += " AND r.situacao=:situacao"
             parametros["situacao"] = situacao
@@ -479,11 +534,47 @@ def listarRelacionados(
         return {"itens": itens, "total": total, "pagina": pagina, "tamanho": tamanho}
 
 
+def resolverEmpresaDaOrigem(
+    conexao: Connection,
+    origem: dict,
+    empresaId: str | None,
+    contexto: ContextoLocal,
+    confirmarTelefoneCompartilhado: bool,
+) -> str:
+    if empresaId:
+        return repositorio.buscarEmpresa(conexao, empresaId, contexto)["id"]
+    try:
+        entrada = EmpresaEntrada(
+            nome=origem["company_name"],
+            telefone=origem["phone"] or "",
+            confirmarTelefoneCompartilhado=confirmarTelefoneCompartilhado,
+            segmento=origem["segmento"] or origem["category"] or "",
+            cidade=origem["city"] or "",
+            uf=origem["state"] or "",
+            site=origem["website"] or "",
+            urlMaps=origem["maps_url"] or "",
+            responsavel=origem["prospectador"] or contexto.nome,
+        )
+    except ValueError as erro:
+        raise ErroCrm(
+            "O lead contém dados inválidos. Corrija o cadastro ou vincule a uma empresa existente."
+        ) from erro
+    return adicionarEmpresa(conexao, entrada, contexto)["id"]
+
+
 def converterSelecionado(
-    selectedId: int, empresaId: str | None, contexto: ContextoLocal
+    selectedId: int,
+    empresaId: str | None,
+    contexto: ContextoLocal,
+    confirmarTelefoneCompartilhado: bool,
 ) -> dict:
-    with repositorio.transacao() as conexao:
+    with repositorio.transacao(bloquearEscrita=True) as conexao:
         parametros = {"id": selectedId, "org": contexto.organizationId}
+        selecionados = repositorio.consultar(
+            conexao, "SELECT * FROM selectedlead WHERE id=:id", parametros
+        )
+        if not selecionados:
+            raise ErroCrm("Lead selecionado não encontrado.", "NAO_ENCONTRADO", 404)
         origens = repositorio.consultar(
             conexao,
             "SELECT empresaId FROM crm_origem_selecionada WHERE selectedId=:id AND organizationId=:org",
@@ -491,51 +582,10 @@ def converterSelecionado(
         )
         if origens:
             return {"empresaId": origens[0]["empresaId"], "jaVinculado": True}
-        selecionados = repositorio.consultar(
-            conexao, "SELECT * FROM selectedlead WHERE id=:id", parametros
-        )
-        if not selecionados:
-            raise ErroCrm("Lead selecionado não encontrado.", "NAO_ENCONTRADO", 404)
         selecionado = selecionados[0]
-        if empresaId:
-            repositorio.buscarEmpresa(conexao, empresaId, contexto)
-        else:
-            telefone = selecionado["phone"] or ""
-            if telefone:
-                try:
-                    normalizado = normalizarTelefone(telefone)
-                except ValueError as erro:
-                    raise ErroCrm(
-                        "Corrija o telefone do lead antes de adicioná-lo ao CRM."
-                    ) from erro
-                candidatas = repositorio.consultar(
-                    conexao,
-                    "SELECT DISTINCT e.id,e.nome,e.cidade,e.uf FROM crm_empresa e JOIN crm_contato c ON c.empresaId=e.id WHERE e.organizationId=:org AND c.organizationId=:org AND c.telefoneNormalizado=:telefone",
-                    {"org": contexto.organizationId, "telefone": normalizado},
-                )
-                if candidatas:
-                    raise ErroCrm(
-                        "Telefone já cadastrado. Confirme a vinculação a uma empresa existente.",
-                        "EMPRESA_DUPLICADA",
-                        409,
-                        candidatas,
-                    )
-            try:
-                entrada = EmpresaEntrada(
-                    nome=selecionado["company_name"],
-                    telefone=telefone,
-                    segmento=selecionado["segmento"] or selecionado["category"] or "",
-                    cidade=selecionado["city"] or "",
-                    uf=selecionado["state"] or "",
-                    site=selecionado["website"] or "",
-                    urlMaps=selecionado["maps_url"] or "",
-                    responsavel=selecionado["prospectador"] or contexto.nome,
-                )
-            except ValueError as erro:
-                raise ErroCrm(
-                    "O lead contém dados inválidos. Corrija o cadastro ou vincule a uma empresa existente."
-                ) from erro
-            empresaId = adicionarEmpresa(conexao, entrada, contexto)["id"]
+        empresaId = resolverEmpresaDaOrigem(
+            conexao, selecionado, empresaId, contexto, confirmarTelefoneCompartilhado
+        )
         repositorio.inserir(
             conexao,
             "crm_origem_selecionada",
@@ -553,6 +603,67 @@ def converterSelecionado(
             empresaId,
             "origem",
             f"Lead selecionado #{selectedId} vinculado ao CRM, sem registrar abordagem.",
+            contexto,
+        )
+        return {"empresaId": empresaId, "jaVinculado": False}
+
+
+def converterLeadHistorico(
+    historicoId: int,
+    leadId: int,
+    empresaId: str | None,
+    contexto: ContextoLocal,
+    confirmarTelefoneCompartilhado: bool,
+) -> dict:
+    with repositorio.transacao(bloquearEscrita=True) as conexao:
+        parametros = {
+            "historicoId": historicoId,
+            "leadId": leadId,
+            "organizationId": contexto.organizationId,
+        }
+        resultados = repositorio.consultar(
+            conexao,
+            """SELECT l.company_name,l.phone,l.category,l.website,l.maps_url,
+                h.keyword AS segmento,h.city,h.state,h.prospectador,h.created_at AS historicoCriadoEm
+            FROM lead l JOIN searchhistory h ON h.id=l.search_history_id
+            WHERE h.id=:historicoId AND l.id=:leadId""",
+            parametros,
+        )
+        if not resultados:
+            raise ErroCrm("Lead do histórico não encontrado.", "NAO_ENCONTRADO", 404)
+        origem = resultados[0]
+        parametros["historicoCriadoEm"] = origem["historicoCriadoEm"]
+        vinculos = repositorio.consultar(
+            conexao,
+            """SELECT empresaId FROM crm_origem_historico
+            WHERE historicoId=:historicoId AND leadId=:leadId
+            AND historicoCriadoEm=:historicoCriadoEm AND organizationId=:organizationId""",
+            parametros,
+        )
+        if vinculos:
+            return {"empresaId": vinculos[0]["empresaId"], "jaVinculado": True}
+
+        empresaId = resolverEmpresaDaOrigem(
+            conexao, origem, empresaId, contexto, confirmarTelefoneCompartilhado
+        )
+        repositorio.inserir(
+            conexao,
+            "crm_origem_historico",
+            {
+                **parametros,
+                "id": str(uuid4()),
+                "empresaId": empresaId,
+                "nomeOriginal": origem["company_name"],
+                "urlMapsOriginal": origem["maps_url"] or "",
+                "createdBy": contexto.actorId,
+                "createdAt": agoraUtc(),
+            },
+        )
+        registrarEvento(
+            conexao,
+            empresaId,
+            "origem",
+            f"Lead #{leadId} da prospecção #{historicoId} vinculado ao CRM, sem registrar abordagem.",
             contexto,
         )
         return {"empresaId": empresaId, "jaVinculado": False}

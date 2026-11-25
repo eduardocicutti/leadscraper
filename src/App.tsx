@@ -77,9 +77,12 @@ function Workspace() {
     refetch: consultarExtracao,
   } = useQuery({
     queryKey: ["status", jobId],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api
-        .get<StatusResponse>(`/status/${jobId}`)
+        .get<StatusResponse>(`/status/${jobId}`, {
+          params: { somenteProgresso: true },
+          signal,
+        })
         .then((response) => response.data),
     enabled: Boolean(jobId) && !jobId?.startsWith("history:") && isPolling,
     refetchInterval: 1500,

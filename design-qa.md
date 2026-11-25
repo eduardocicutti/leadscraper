@@ -20,12 +20,12 @@ Implementação: navegador interno em http://127.0.0.1:1420. Captura Sobre: `doc
 - Tipografia: sans-serif de sistema, hierarquia de título e texto secundário legíveis. Fonte exata da referência não fornecida.
 - Layout: sidebar, cabeçalho, grid de cards e CTAs implementados; ainda há diferença de densidade vertical em Sobre e nas telas legadas.
 - Cores: tokens escuros e azul de destaque aplicados; tema claro verificado separadamente com persistência.
-- Assets: SVG Lucide de interface. Layers é identificação provisória, não reprodução do logo oficial Adapti; ativo oficial continua pendente.
+- Assets: ícones de interface em SVG Lucide. A barra lateral e a tela Sobre usam os PNGs fornecidos para esta alteração: `logoAdapti.png` no tema claro e `Logos Adapti - 4.png` em versão branca com fundo transparente no tema escuro.
 - Conteúdo: dados reais do diagnóstico substituem exemplos. Menus futuros mostram fase e indisponibilidade. Sem números fictícios ou indicadores de produtividade simulados.
 
 ## Pendências de fidelidade
 
-- P1: logo oficial da referência ainda não disponível em vetor. Não declarar marca fiel.
+- O arquivo vetorial da marca segue pendente. A interface usa as versões PNG fornecidas.
 - P2: ajustar densidade dos cards Sobre e modernizar componentes legados de histórico/lista para a mesma escala.
 - P2: primeira tela não contém o mapa regional da referência; mapa e catálogo de municípios pertencem à fase 3 e não foram simulados neste incremento.
 

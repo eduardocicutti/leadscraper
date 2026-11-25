@@ -6,6 +6,8 @@ export interface Lead {
   history_id?: number | null;
   source_history_id?: number | null;
   source_lead_id?: number | null;
+  source?: string;
+  runId?: number | null;
   nome: string;
   categoria: string;
   nota: number | null;
@@ -40,6 +42,14 @@ export interface SearchRequest {
   estado: string;
   max_results: number;
   prospectador: string;
+  municipioCodigo?: number;
+}
+
+export interface MedicaoColeta {
+  processados: number;
+  coletados: number;
+  falhas: number;
+  duracaoMs: number;
 }
 
 export interface StatusResponse {
@@ -49,6 +59,11 @@ export interface StatusResponse {
   log: string;
   leads_count: number;
   leads: Lead[];
+  processados?: number;
+  coletados?: number;
+  falhas?: number;
+  duracaoMs?: number;
+  concluidoComAvisos?: boolean;
 }
 
 export interface HistoryRecord {
@@ -56,7 +71,7 @@ export interface HistoryRecord {
   keyword: string;
   city: string;
   state: string;
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "done_with_warnings" | "error";
   leads_found: number;
   prospectador: string;
   created_at: string;
