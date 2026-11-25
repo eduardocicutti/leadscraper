@@ -3,6 +3,7 @@ import { Download, RefreshCw, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api, type HistoryRecord } from "../api";
 import { useAppStore } from "../store";
+import { idLegadoValido } from "../utils/idLegadoValido";
 
 const labelClass =
   "text-[10px] font-semibold text-[#4a5568] uppercase tracking-[0.08em]";
@@ -14,7 +15,9 @@ const cellClass =
   "text-[13px] text-[#8896ac] px-3 py-2.5 font-['JetBrains_Mono'] whitespace-nowrap";
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString("pt-BR", {
+  const instante = new Date(value);
+  if (!Number.isFinite(instante.getTime())) return "Sem data";
+  return instante.toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",
@@ -34,7 +37,7 @@ export function PastProspectionsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["history"],
     queryFn: () => api.get<HistoryRecord[]>("/history").then((r) => r.data),
     refetchInterval: 5000,
@@ -64,7 +67,10 @@ export function PastProspectionsPage() {
   );
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.delete(`/history/${id}`),
+    mutationFn: (id: number) => {
+      if (!idLegadoValido(id)) throw new Error("Prospecção inválida.");
+      return api.delete(`/history/${id}`);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["history"] });
       setSelectedIds([]);
@@ -72,6 +78,7 @@ export function PastProspectionsPage() {
   });
 
   async function handleOpen(item: HistoryRecord) {
+    if (!idLegadoValido(item.id)) return;
     const response = await api.get(`/history/${item.id}`);
     openSavedLeads(
       {
@@ -82,10 +89,12 @@ export function PastProspectionsPage() {
       },
       response.data.leads,
       item.id,
+      response.data.status === "done_with_warnings",
     );
   }
 
   async function handleDownload(item: HistoryRecord) {
+    if (!idLegadoValido(item.id)) return;
     const response = await api.get(`/history/${item.id}/download`, {
       responseType: "blob",
     });
@@ -98,6 +107,7 @@ export function PastProspectionsPage() {
   }
 
   async function handleRefresh(item: HistoryRecord) {
+    if (!idLegadoValido(item.id)) return;
     const response = await api.post<{ job_id: string }>(`/history/${item.id}/refresh`);
     setRefreshJob(response.data.job_id);
   }
@@ -111,6 +121,7 @@ export function PastProspectionsPage() {
   }
 
   function toggleSelect(id: number) {
+    if (!idLegadoValido(id)) return;
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
@@ -118,6 +129,7 @@ export function PastProspectionsPage() {
 
   return (
     <div className="flex-1 min-h-0 p-6 flex flex-col gap-4 overflow-hidden">
+      {isError && <div className="aviso" role="alert">Não foi possível carregar o histórico. Verifique o backend. <button type="button" className="botao" onClick={() => void refetch()}>Tentar novamente</button></div>}
       <section className="border border-[#1e2d45] rounded-md bg-[#0f1623] px-4 py-3 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 w-40">
           <span className={labelClass}>Segmento</span>
@@ -161,6 +173,7 @@ export function PastProspectionsPage() {
           >
             <option value="">Todos</option>
             <option value="done">Concluído</option>
+            <option value="done_with_warnings">Concluído com avisos</option>
             <option value="running">Em andamento</option>
             <option value="error">Erro</option>
           </select>
@@ -234,7 +247,9 @@ export function PastProspectionsPage() {
                       <td className={cellClass}>{item.city}</td>
                       <td className={cellClass}>{item.state}</td>
                       <td className={cellClass}>{item.leads_found}</td>
-                      <td className={cellClass}>{item.status}</td>
+                      <td className={cellClass}>
+                        {item.status === "done_with_warnings" ? "Concluído com avisos" : item.status}
+                      </td>
                       <td className={cellClass}>{formatDate(item.created_at)}</td>
                       <td className={cellClass}>
                         <div className="flex items-center gap-1">

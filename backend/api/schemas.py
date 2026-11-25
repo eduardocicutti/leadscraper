@@ -1,11 +1,16 @@
-from pydantic import BaseModel
+from typing import Annotated
+
+from pydantic import BaseModel, Field
+
+
+QuantidadeColeta = Annotated[int, Field(ge=1, le=500, strict=True)]
 
 
 class ScrapeRequest(BaseModel):
     segmento: str
     cidade: str
     estado: str
-    max_results: int = 30
+    max_results: QuantidadeColeta = 30
     prospectador: str = ""
 
 

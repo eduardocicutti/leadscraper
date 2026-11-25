@@ -144,6 +144,8 @@ def generate_xlsx(
 
         for col, val in enumerate(row_values, 1):
             cell = ws.cell(row=row, column=col, value=val)
+            if isinstance(val, str):
+                cell.data_type = "s"
             cell.fill = row_fill
             cell.border = border
             cell.alignment = Alignment(vertical="center", wrap_text=False)
@@ -236,7 +238,9 @@ def generate_xlsx(
     ]
     for r, (label, val) in enumerate(items, 3):
         ws3.cell(r, 1, label).font = Font(bold=True)
-        ws3.cell(r, 2, val)
+        celulaResumo = ws3.cell(r, 2, val)
+        if isinstance(val, str):
+            celulaResumo.data_type = "s"
         ws3.cell(r, 1).border = border
         ws3.cell(r, 2).border = border
     ws3.column_dimensions["A"].width = 22

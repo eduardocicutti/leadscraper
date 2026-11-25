@@ -3,24 +3,27 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Lead } from "../api";
 import { leadKey, useAppStore } from "../store";
+import { ConverterLead } from "../features/crm/ConverterLead";
+import { idLegadoValido } from "../utils/idLegadoValido";
+import { urlHttp } from "../utils/urlHttp";
 
 function tempBadge(classificacao: string) {
   if (classificacao.includes("Quente")) {
     return {
-      label: "HOT",
+      label: "Quente",
       className:
         "bg-[rgba(239,68,68,0.08)] text-[#fca5a5] border-[rgba(239,68,68,0.2)]",
     };
   }
   if (classificacao.includes("Morno")) {
     return {
-      label: "WARM",
+      label: "Morno",
       className:
         "bg-[rgba(234,179,8,0.08)] text-[#fcd34d] border-[rgba(234,179,8,0.2)]",
     };
   }
   return {
-    label: "COLD",
+    label: "Frio",
     className:
       "bg-[rgba(59,130,246,0.08)] text-[#93c5fd] border-[rgba(59,130,246,0.2)]",
   };
@@ -41,13 +44,14 @@ function LinkCell({
   label: string;
   children: React.ReactNode;
 }) {
-  if (!href) {
+  const url = urlHttp(href);
+  if (!url) {
     return <span className="text-[#1e2d45]">—</span>;
   }
 
   return (
     <a
-      href={href}
+      href={url}
       target="_blank"
       rel="noreferrer"
       aria-label={label}
@@ -69,12 +73,17 @@ export function LeadsTable() {
   const clearLeadSelection = useAppStore((state) => state.clearLeadSelection);
 
   const selectedLeads = leads.filter((lead) => selectedLeadKeys.includes(leadKey(lead)));
+  const podeAdicionarAoCrm =
+    status === "done" &&
+    leads.some((lead) => idLegadoValido(lead.id) && idLegadoValido(lead.history_id));
+  const estaExecutando = status === "pending" || status === "running";
 
   async function handleDownload() {
     if (!jobId || !searchParams) return;
 
     if (jobId.startsWith("history:")) {
-      const historyId = jobId.replace("history:", "");
+      const historyId = Number(jobId.slice("history:".length));
+      if (!idLegadoValido(historyId)) return;
       const response = await api.get(`/history/${historyId}/download`, {
         responseType: "blob",
       });
@@ -87,7 +96,9 @@ export function LeadsTable() {
       return;
     }
 
-    const query = new URLSearchParams(searchParams).toString();
+    if (!/^\d+$/.test(jobId)) return;
+    const { segmento, cidade, estado, prospectador } = searchParams;
+    const query = new URLSearchParams({ segmento, cidade, estado, prospectador }).toString();
     const response = await api.get(`/download/${jobId}?${query}`, {
       responseType: "blob",
     });
@@ -140,8 +151,14 @@ export function LeadsTable() {
       </div>
 
       {leads.length === 0 ? (
-        <div className="flex-1 p-4 text-[12px] font-['JetBrains_Mono'] text-[#1e2d45]">
-          // nenhuma extração iniciada
+        <div className="estado-vazio">
+          <MapPin size={38} aria-hidden="true" />
+          <h2>{estaExecutando ? "Aguardando resultados" : "Nenhum resultado disponível"}</h2>
+          <p>
+            {estaExecutando
+              ? "Os resultados ficam disponíveis ao concluir a extração."
+              : "Escolha um município e um segmento para iniciar uma busca."}
+          </p>
         </div>
       ) : (
         <div className="flex-1 overflow-auto">
@@ -160,6 +177,7 @@ export function LeadsTable() {
                 <th className={`${headerClass} w-16`}>Site</th>
                 <th className={`${headerClass} w-16`}>Maps</th>
                 <th className={`${headerClass} w-20`}>WA</th>
+                {podeAdicionarAoCrm && <th className={headerClass}>CRM</th>}
               </tr>
             </thead>
             <tbody>
@@ -167,6 +185,7 @@ export function LeadsTable() {
                 const badge = tempBadge(lead.classificacao);
                 const key = leadKey(lead);
                 const checked = selectedLeadKeys.includes(key);
+                const urlWhatsApp = lead.is_whatsapp ? urlHttp(lead.whatsapp_link) : undefined;
                 return (
                   <tr
                     key={`${lead.nome}-${lead.url_maps}-${index}`}
@@ -212,9 +231,9 @@ export function LeadsTable() {
                       </LinkCell>
                     </td>
                     <td className={cellClass}>
-                      {lead.is_whatsapp && lead.whatsapp_link ? (
+                      {urlWhatsApp ? (
                         <a
-                          href={lead.whatsapp_link}
+                          href={urlWhatsApp}
                           target="_blank"
                           rel="noreferrer"
                           className="h-6 px-2 bg-transparent border border-[#1e2d45] rounded-sm text-[11px] text-[#4a5568] hover:border-[#25d366] hover:text-[#25d366] transition-colors duration-100 inline-flex items-center"
@@ -225,6 +244,19 @@ export function LeadsTable() {
                         <span className="text-[#1e2d45]">—</span>
                       )}
                     </td>
+                    {podeAdicionarAoCrm && (
+                      <td className={cellClass}>
+                        {idLegadoValido(lead.id) && idLegadoValido(lead.history_id) ? (
+                          <ConverterLead
+                            key={`${lead.history_id}:${lead.id}`}
+                            leadId={lead.id}
+                            historicoId={lead.history_id}
+                          />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

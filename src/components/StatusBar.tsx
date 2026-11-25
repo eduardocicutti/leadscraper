@@ -1,49 +1,54 @@
 import { useAppStore } from "../store";
 
-export function StatusBar() {
-  const status = useAppStore((state) => state.status);
-  const progress = useAppStore((state) => state.progress);
-  const total = useAppStore((state) => state.total);
-  const log = useAppStore((state) => state.log);
+function formatarDuracao(duracaoMs: number) {
+  const segundos = Math.floor(duracaoMs / 1000);
+  return segundos >= 60
+    ? `${Math.floor(segundos / 60)} min ${segundos % 60} s`
+    : `${segundos} s`;
+}
 
-  if (status === "idle") {
-    return null;
+export function StatusBar() {
+  const status = useAppStore((estado) => estado.status);
+  const processadas = useAppStore((estado) => estado.progress);
+  const encontradas = useAppStore((estado) => estado.total);
+  const mensagem = useAppStore((estado) => estado.log);
+  const medicao = useAppStore((estado) => estado.medicaoColeta);
+  const concluiuComAvisos = useAppStore((estado) => estado.concluiuComAvisos);
+
+  if (status === "idle") return null;
+
+  let titulo = "Extração em andamento";
+  if (status === "done") {
+    titulo = concluiuComAvisos ? "Extração concluída com avisos" : "Extração concluída";
+  } else if (status === "error") {
+    titulo = "Falha na extração";
   }
 
-  const percent = total > 0 ? Math.min(100, Math.round((progress / total) * 100)) : 0;
-  const label =
-    status === "done"
-      ? "EXTRAÇÃO CONCLUÍDA"
-      : status === "error"
-        ? "FALHA NA EXTRAÇÃO"
-        : "EXTRAINDO";
-
   return (
-    <div className="bg-[#080d14] border border-[#1e2d45] rounded-md p-4 font-['JetBrains_Mono']">
-      <div className="flex items-center justify-between text-[12px] text-[#8896ac]">
-        <div className="flex items-center gap-2">
-          <span className="text-[#2563eb]">▶</span>
-          <span className="font-['Geist_Mono'] font-bold text-[#e8edf5]">{label}</span>
-          {status === "running" || status === "pending" ? (
-            <span className="animate-[blink_1s_step-end_infinite] text-[#2563eb]">|</span>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-4 font-['Geist_Mono'] font-bold text-[#e8edf5]">
-          <span>
-            {progress} / {total}
-          </span>
-          <span>{percent}%</span>
-        </div>
+    <section
+      className="painel status-prospeccao"
+      aria-label="Andamento da extração"
+      data-situacao={status}
+    >
+      <div role="status">
+        <h2>{titulo}</h2>
+        {mensagem && <p>{mensagem}</p>}
       </div>
-      <div className="mt-3 h-0.5 bg-[#162035] overflow-hidden">
-        <div
-          className="h-full bg-[#2563eb] transition-all duration-500"
-          style={{ width: `${percent}%` }}
+      {encontradas > 0 && (
+        <progress
+          aria-label="Estabelecimentos processados"
+          max={encontradas}
+          value={processadas}
         />
-      </div>
-      <div className="mt-3 text-[12px] text-[#8896ac]">
-        <span className="text-[#2563eb]">&gt;</span> {log || "Extraindo..."}
-      </div>
-    </div>
+      )}
+      {medicao && (
+        <dl className="medicao-prospeccao">
+          <div><dt>Coletados</dt><dd>{medicao.coletados}</dd></div>
+          <div><dt>Processados</dt><dd>{medicao.processados}</dd></div>
+          <div><dt>Falhas</dt><dd>{medicao.falhas}</dd></div>
+          <div><dt>Tempo decorrido</dt><dd>{formatarDuracao(medicao.duracaoMs)}</dd></div>
+        </dl>
+      )}
+    </section>
   );
 }

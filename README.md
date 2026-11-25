@@ -1,5 +1,7 @@
 # Lead Scraper
 
+> A evolução para Plataforma Comercial começou. Consulte [o primeiro incremento](docs/implementacao-fase-1.md), [o plano](docs/requisitos-e-plano-implementacao-2026.md) e [a direção visual](docs/direcao-visual-interface.md). O backend e o banco continuam locais nesta etapa.
+
 Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecimentos por segmento e localização, qualifica com score comercial e exporta planilha Excel.
 
 ---
@@ -30,7 +32,7 @@ Aplicativo desktop para prospecção de leads no Google Maps. Busca estabelecime
 ### Dependências Python
 
 ```powershell
-pip install fastapi uvicorn playwright openpyxl sqlmodel pyinstaller
+python -m pip install -r requirements.txt -r requirements-dev.txt
 python -m playwright install chromium
 ```
 
@@ -51,6 +53,21 @@ npm install
 ---
 
 ## Como rodar
+
+### Demonstração no navegador
+
+Use Node.js 22 e Python 3.12, as versões usadas na validação do projeto. Em um terminal PowerShell, dentro da pasta do projeto:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm.cmd ci
+$env:DB_PATH = Join-Path (Get-Location) 'build\demo\demonstracao.db'
+New-Item -ItemType Directory -Force (Split-Path $env:DB_PATH) | Out-Null
+.\.venv\Scripts\python.exe main.py
+```
+
+Em um segundo terminal na mesma pasta, execute `npm.cmd run dev` e abra `http://127.0.0.1:1420/`. Mapa, catálogo e CRM funcionam sem Rust, Tauri ou Chromium do Playwright. Para iniciar uma coleta real, instale o Chromium com `.\.venv\Scripts\python.exe -m playwright install chromium` antes da demonstração.
 
 ### Modo desenvolvimento (recomendado)
 
@@ -74,7 +91,7 @@ O frontend carrega em `http://127.0.0.1:1420` e comunica com a API em `http://12
 python -m uvicorn main:app --port 8000
 ```
 
-> O arquivo `roda.bat` abre o navegador em `:8000`, mas a interface React exige o Vite ou o build em `dist/`. Prefira `npm run tauri dev` ou `npm run dev` + backend separado.
+Para abrir a interface React no navegador, siga os passos em [Demonstração no navegador](#demonstração-no-navegador).
 
 ### Build de produção
 
@@ -92,10 +109,12 @@ O instalador `.exe` é gerado em `src-tauri/target/release/bundle/`.
 ## Como usar
 
 1. Selecione o **prospectador** no formulário (as iniciais aparecem no avatar da sidebar).
-2. Informe **segmento**, **cidade**, **estado** e **quantidade** de leads.
-3. Clique em **Iniciar extração** e acompanhe o progresso na barra de status.
+2. Escolha a **UF** pelo mapa ou pela lista e busque o **município** por nome ou código IBGE. Informe o segmento e a quantidade de leads.
+3. Revise os parâmetros e confirme a extração. A barra de status informa o andamento. Quando houver falha parcial, os resultados disponíveis continuam acessíveis.
 4. Ao concluir, revise a tabela, marque leads com **checkbox** e clique em **Salvar selecionados** para a Lista Preferencial.
 5. Exporte a busca atual com **Exportar .xlsx**.
+
+Consulte os contratos e a origem dos dados na [documentação da fase 3](docs/implementacao-fase-3.md).
 
 ### Menu lateral
 
@@ -199,6 +218,10 @@ lead_scraper/
 ---
 
 ## Problemas comuns
+
+### CRM local em desenvolvimento
+
+O CRM local reúne empresas, contatos, qualificação, atividades e lembretes persistentes. É possível incluir leads da Lista Preferencial e de resultados de prospecção já gravados, consultar a linha do tempo e filtrar empresas pelo relacionamento registrado. O backend e a interface devem ser atualizados juntos para usar as rotas da fase 2. A configuração da prévia isolada, os contratos e as limitações estão na [documentação da fase 2](docs/implementacao-fase-2.md). Autenticação e sincronização remota estão previstas para fases posteriores.
 
 **Backend não responde**  
 Confirme que `python main.py` está rodando e que a porta 8000 está livre.

@@ -1704,7 +1704,7 @@ dependencies = [
 
 [[package]]
 name = "lead-scraper"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "serde_json",
  "tauri",

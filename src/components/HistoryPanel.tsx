@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, type HistoryDetail, type HistoryRecord } from "../api";
 import { useAppStore } from "../store";
+import { idLegadoValido } from "../utils/idLegadoValido";
 
 function formatRelative(value: string) {
   const date = new Date(value);
   const diff = Date.now() - date.getTime();
+  if (!Number.isFinite(diff)) return "Sem data";
   const minutes = Math.max(0, Math.floor(diff / 60000));
 
   if (minutes < 1) return "agora";
@@ -27,6 +29,7 @@ export function HistoryPanel() {
   });
 
   async function handleOpen(item: HistoryRecord) {
+    if (!idLegadoValido(item.id)) return;
     const response = await api.get<HistoryDetail>(`/history/${item.id}`);
     openSavedLeads(
       {
@@ -37,6 +40,7 @@ export function HistoryPanel() {
       },
       response.data.leads,
       item.id,
+      response.data.status === "done_with_warnings",
     );
   }
 

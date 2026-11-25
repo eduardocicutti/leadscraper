@@ -1,10 +1,14 @@
 import { create } from "zustand";
-import type { Lead, SearchRequest, StatusResponse } from "./api";
+import type { Lead, MedicaoColeta, SearchRequest, StatusResponse } from "./api";
+import type { Tela } from "./config/navegacao";
 
 type Status = "idle" | "pending" | "running" | "done" | "error";
-type View = "search" | "selected" | "history";
+type View = Tela;
 
 interface AppStore {
+  empresaSelecionadaId: string | null;
+  definirEmpresaSelecionada: (id: string | null) => void;
+  abrirEmpresa: (id: string) => void;
   activeView: View;
   jobId: string | null;
   refreshJobId: string | null;
@@ -12,6 +16,8 @@ interface AppStore {
   progress: number;
   total: number;
   log: string;
+  medicaoColeta: MedicaoColeta | null;
+  concluiuComAvisos: boolean;
   leads: Lead[];
   selectedLeadKeys: string[];
   searchParams: Omit<SearchRequest, "max_results"> | null;
@@ -19,13 +25,18 @@ interface AppStore {
   prospectador: string;
   historyOpen: boolean;
   setActiveView: (view: View) => void;
-  setJob: (jobId: string, params: AppStore["searchParams"], maxResults: number) => void;
+  setJob: (
+    jobId: string,
+    params: AppStore["searchParams"],
+    maxResults: number,
+  ) => void;
   setRefreshJob: (jobId: string) => void;
   updateStatus: (data: StatusResponse) => void;
   openSavedLeads: (
     params: AppStore["searchParams"],
     leads: Lead[],
     historyId?: number,
+    concluiuComAvisos?: boolean,
   ) => void;
   toggleLeadSelection: (key: string) => void;
   clearLeadSelection: () => void;
@@ -35,6 +46,7 @@ interface AppStore {
 }
 
 const initialState = {
+  empresaSelecionadaId: null as string | null,
   activeView: "search" as View,
   jobId: null,
   refreshJobId: null,
@@ -42,6 +54,8 @@ const initialState = {
   progress: 0,
   total: 0,
   log: "",
+  medicaoColeta: null as MedicaoColeta | null,
+  concluiuComAvisos: false,
   leads: [],
   selectedLeadKeys: [],
   searchParams: null,
@@ -51,11 +65,18 @@ const initialState = {
 };
 
 export const leadKey = (lead: Lead) =>
-  lead.url_maps || lead.telefone || `${lead.nome}-${lead.cidade}-${lead.estado}`;
+  lead.url_maps ||
+  lead.telefone ||
+  `${lead.nome}-${lead.cidade}-${lead.estado}`;
 
 export const useAppStore = create<AppStore>((set) => ({
   ...initialState,
-  setActiveView: (activeView) => set({ activeView, historyOpen: false }),
+  definirEmpresaSelecionada: (empresaSelecionadaId) =>
+    set({ empresaSelecionadaId }),
+  abrirEmpresa: (empresaSelecionadaId) =>
+    set({ empresaSelecionadaId, activeView: "companies", historyOpen: false }),
+  setActiveView: (activeView) =>
+    set({ activeView, historyOpen: false, empresaSelecionadaId: null }),
   setJob: (jobId, params, maxResults) =>
     set({
       activeView: "search",
@@ -67,6 +88,8 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: 0,
       total: 0,
       log: "Extraindo...",
+      medicaoColeta: null,
+      concluiuComAvisos: false,
       leads: [],
       selectedLeadKeys: [],
     }),
@@ -79,6 +102,8 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: 0,
       total: 0,
       log: "Iniciando releitura...",
+      medicaoColeta: null,
+      concluiuComAvisos: false,
       leads: [],
     }),
   updateStatus: (data) =>
@@ -87,9 +112,22 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: data.progress,
       total: data.total,
       log: data.log,
+      medicaoColeta:
+        typeof data.processados === "number" &&
+        typeof data.coletados === "number" &&
+        typeof data.falhas === "number" &&
+        typeof data.duracaoMs === "number"
+          ? {
+              processados: data.processados,
+              coletados: data.coletados,
+              falhas: data.falhas,
+              duracaoMs: data.duracaoMs,
+            }
+          : null,
+      concluiuComAvisos: data.concluidoComAvisos === true,
       leads: data.leads,
     }),
-  openSavedLeads: (params, leads, historyId) =>
+  openSavedLeads: (params, leads, historyId, concluiuComAvisos = false) =>
     set({
       activeView: "search",
       jobId: historyId ? `history:${historyId}` : null,
@@ -100,6 +138,8 @@ export const useAppStore = create<AppStore>((set) => ({
       progress: leads.length,
       total: leads.length,
       log: `Histórico reaberto com ${leads.length} leads.`,
+      medicaoColeta: null,
+      concluiuComAvisos,
       leads,
       selectedLeadKeys: [],
     }),
