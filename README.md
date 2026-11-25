@@ -54,6 +54,21 @@ npm install
 
 ## Como rodar
 
+### Demonstração no navegador
+
+Use Node.js 22 e Python 3.12, as versões usadas na validação do projeto. Em um terminal PowerShell, dentro da pasta do projeto:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm.cmd ci
+$env:DB_PATH = Join-Path (Get-Location) 'build\demo\demonstracao.db'
+New-Item -ItemType Directory -Force (Split-Path $env:DB_PATH) | Out-Null
+.\.venv\Scripts\python.exe main.py
+```
+
+Em um segundo terminal na mesma pasta, execute `npm.cmd run dev` e abra `http://127.0.0.1:1420/`. Mapa, catálogo e CRM funcionam sem Rust, Tauri ou Chromium do Playwright. Para iniciar uma coleta real, instale o Chromium com `.\.venv\Scripts\python.exe -m playwright install chromium` antes da demonstração.
+
 ### Modo desenvolvimento (recomendado)
 
 Em um terminal, inicie o backend:
