@@ -18,7 +18,7 @@ O app usa o updater oficial do Tauri apontando para:
 https://github.com/eduardocicutti/leadscraper/releases/latest/download/latest.json
 ```
 
-O workflow `.github/workflows/release.yml` gera e publica o `latest.json` quando uma tag `v*` e enviada ao GitHub.
+O workflow `.github/workflows/release.yml` gera e publica o `latest.json` quando uma tag `v*` é enviada ao GitHub. A execução manual em uma branch gera um instalador candidato assinado e disponibiliza o pacote e os checksums como artefato do Actions. Use o candidato para validar instalação limpa e atualização antes de criar a tag.
 
 Configure estes secrets no GitHub antes do proximo release:
 

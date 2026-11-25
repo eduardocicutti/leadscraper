@@ -1,6 +1,6 @@
 {
   "productName": "Lead Scraper",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "identifier": "com.leadscraper.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "Lead Scraper 0.5.0",
+        "title": "Lead Scraper 0.6.0",
         "width": 1200,
         "height": 800,
         "minWidth": 960,
