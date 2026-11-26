@@ -194,7 +194,11 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"ok": True, "db_ready": database.is_db_ready()}
+        return {
+            "ok": True,
+            "db_ready": database.is_db_ready(),
+            "desktopVersion": os.getenv("LEAD_SCRAPER_DESKTOP_VERSION"),
+        }
 
     @app.get("/diagnostics")
     async def diagnostics():

@@ -25,15 +25,18 @@ function Instalar-Programa([string]$Instalador) {
     return $executavel.FullName
 }
 
-function Aguardar-Backend($Processo) {
+function Aguardar-Backend($Processo, [string]$Versao = '') {
     for ($tentativa = 0; $tentativa -lt 45; $tentativa++) {
         if ($Processo.HasExited) { throw 'O aplicativo encerrou durante a inicialização.' }
         try {
-            if ((Invoke-RestMethod "$api/health" -TimeoutSec 2).db_ready) { return }
+            $saude = Invoke-RestMethod "$api/health" -TimeoutSec 2
+            if ($saude.db_ready -and (!$Versao -or $saude.desktopVersion -eq $Versao)) { return }
         } catch {
-            Start-Sleep -Seconds 1
         }
+        Start-Sleep -Seconds 1
     }
+    Get-ChildItem -Path (Join-Path $env:APPDATA 'com.leadscraper.app') -Filter '*.log' |
+        ForEach-Object { Write-Host $_.Name; Get-Content -LiteralPath $_.FullName -Tail 80 }
     throw 'O sidecar não confirmou a disponibilidade do banco.'
 }
 
@@ -73,7 +76,7 @@ if ($Cenario -eq 'atualizacao') {
 
 $processo = Start-Process -FilePath (Instalar-Programa $candidato.FullName) -WindowStyle Hidden -PassThru
 try {
-    Aguardar-Backend $processo
+    Aguardar-Backend $processo '0.6.0'
     $municipios = Invoke-RestMethod "$api/api/v1/localidades/municipios?uf=SP&busca=campinas"
     if ($municipios.itens[0].codigo -ne 3509502) { throw 'Catálogo empacotado inválido.' }
     $empresas = Invoke-RestMethod "$api/api/v1/crm/empresas"
