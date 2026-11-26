@@ -37,3 +37,16 @@ jobs:
           & 'build/minisign-0.12/minisign-win64/x86_64/minisign.exe' -Vm $zip -P RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & './.github/scripts/conferir-pacote-windows.ps1' -Pasta 'candidato'
+
+  diagnose:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run }}
+          name: lead-scraper-windows-candidate
+          path: candidato
+      - shell: pwsh
+        run: ./.github/scripts/validar-instalar-debug.ps1 -Cenario atualizacao
