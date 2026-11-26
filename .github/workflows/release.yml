@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       candidate_run:
-        required: true
+        type: string
+      release_tag:
         type: string
 
 permissions:
@@ -19,11 +20,34 @@ jobs:
         with:
           fetch-depth: 0
       - uses: actions/download-artifact@v4
+        if: inputs.release_tag == ''
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.candidate_run }}
           name: lead-scraper-windows-candidate
           path: candidato
+      - name: Download published installers and validate updater manifest
+        if: inputs.release_tag != ''
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Tag inválida.' }
+          $api = 'https://api.github.com/repos/eduardocicutti/leadscraper'
+          $release = Invoke-RestMethod "$api/releases/tags/$env:RELEASE_TAG"
+          $assets = $release.assets | Where-Object name -Match '(\.msi|\.exe)(\.sig)?$|^(SHA256SUMS\.txt|latest\.json)$'
+          if ($assets.Count -ne 6 -or $release.draft -or $release.prerelease) { throw 'Artefatos do release incompletos.' }
+          New-Item -ItemType Directory -Force 'candidato' | Out-Null
+          foreach ($asset in $assets) {
+            Invoke-WebRequest $asset.browser_download_url -OutFile (Join-Path 'candidato' $asset.name)
+          }
+          $manifesto = Get-Content 'candidato/latest.json' -Raw | ConvertFrom-Json
+          if ($manifesto.version.TrimStart('v') -ne $env:RELEASE_TAG.TrimStart('v')) { throw 'Versão do updater incorreta.' }
+          $windows = $manifesto.platforms.'windows-x86_64'
+          $exe = ($assets | Where-Object name -Like '*-setup.exe').Name
+          if (([uri]$windows.url).AbsolutePath -ne "/eduardocicutti/leadscraper/releases/download/$env:RELEASE_TAG/$exe") { throw 'URL padrão do updater incorreta.' }
+          if ($windows.signature -ne (Get-Content -LiteralPath (Join-Path 'candidato' "$exe.sig") -Raw).Trim()) { throw 'Assinatura do manifesto difere do instalador.' }
       - name: Verify installer checksums and updater signatures
         shell: pwsh
         run: |
@@ -39,6 +63,7 @@ jobs:
           & './.github/scripts/conferir-pacote-windows.ps1' -Pasta 'candidato'
 
   diagnose:
+    if: inputs.release_tag == ''
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
