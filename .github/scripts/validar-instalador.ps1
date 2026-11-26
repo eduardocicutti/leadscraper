@@ -35,6 +35,8 @@ function Aguardar-Backend($Processo, [string]$Versao = '') {
         }
         Start-Sleep -Seconds 1
     }
+    Get-ChildItem -Path (Join-Path $env:APPDATA 'com.leadscraper.app') -Filter '*.log' |
+        ForEach-Object { Write-Host $_.Name; Get-Content -LiteralPath $_.FullName -Tail 80 }
     throw 'O sidecar não confirmou a disponibilidade do banco.'
 }
 

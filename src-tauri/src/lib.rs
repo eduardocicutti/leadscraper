@@ -68,13 +68,16 @@ fn encerrar_sidecar_anterior(log_path: &Path) {
     // a instalação antiga pode deixar o processo interno do PyInstaller na porta
     let comando = r#"
         Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue |
-          ForEach-Object { Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue } |
-          Where-Object { $_.Path -eq $env:LEAD_SCRAPER_SIDECAR_PATH } |
-          Stop-Process -ErrorAction Stop
+          ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$($_.OwningProcess)" } |
+          Where-Object { $_.ExecutablePath -eq $env:LEAD_SCRAPER_SIDECAR_PATH } |
+          ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction Stop }
     "#;
     let resultado = std::process::Command::new(powershell)
         .args(["-NoProfile", "-NonInteractive", "-Command", comando])
-        .env("LEAD_SCRAPER_SIDECAR_PATH", instalacao.join("scraper-sidecar.exe"))
+        .env(
+            "LEAD_SCRAPER_SIDECAR_PATH",
+            instalacao.join("scraper-sidecar.exe").to_string_lossy().trim_start_matches(r"\\?\"),
+        )
         .creation_flags(0x08000000)
         .output();
     if !resultado.is_ok_and(|saida| saida.status.success()) {
