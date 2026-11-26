@@ -45,9 +45,9 @@ jobs:
           $manifesto = Get-Content 'candidato/latest.json' -Raw | ConvertFrom-Json
           if ($manifesto.version.TrimStart('v') -ne $env:RELEASE_TAG.TrimStart('v')) { throw 'Versão do updater incorreta.' }
           $windows = $manifesto.platforms.'windows-x86_64'
-          $exe = ($assets | Where-Object name -Like '*-setup.exe').Name
-          if (([uri]$windows.url).AbsolutePath -ne "/eduardocicutti/leadscraper/releases/download/$env:RELEASE_TAG/$exe") { throw 'URL padrão do updater incorreta.' }
-          if ($windows.signature -ne (Get-Content -LiteralPath (Join-Path 'candidato' "$exe.sig") -Raw).Trim()) { throw 'Assinatura do manifesto difere do instalador.' }
+          $exe = $assets | Where-Object name -Like '*-setup.exe'
+          if ($windows.url -notin @($exe.url, $exe.browser_download_url)) { throw 'URL padrão do updater incorreta.' }
+          if ($windows.signature -cne (Get-Content -LiteralPath (Join-Path 'candidato' "$($exe.name).sig") -Raw).Trim()) { throw 'Assinatura do manifesto difere do instalador.' }
       - name: Verify installer checksums and updater signatures
         shell: pwsh
         run: |
